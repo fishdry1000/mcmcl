@@ -1,31 +1,68 @@
 package top.fish1000.mcmcl;
 
+import com.mojang.blaze3d.platform.InputConstants;
+
+import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.screens.PauseScreen;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.screens.TitleScreen;
+import net.minecraft.network.chat.Component;
 import net.neoforged.api.distmarker.Dist;
+import net.neoforged.bus.api.IEventBus;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.ModContainer;
-import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.fml.common.Mod;
-import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
+import net.neoforged.neoforge.client.event.ClientTickEvent;
+import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
+import net.neoforged.neoforge.client.event.ScreenEvent;
 import net.neoforged.neoforge.client.gui.ConfigurationScreen;
 import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
+import net.neoforged.neoforge.common.NeoForge;
 
-// This class will not load on dedicated servers. Accessing client side code from here is safe.
+/** Client entry point and integration points for the in-game launcher. */
 @Mod(value = MinecraftMinecraftLauncher.MODID, dist = Dist.CLIENT)
-// You can use EventBusSubscriber to automatically register all static methods in the class annotated with @SubscribeEvent
-@EventBusSubscriber(modid = MinecraftMinecraftLauncher.MODID, value = Dist.CLIENT)
-public class MinecraftMinecraftLauncherClient {
-    public MinecraftMinecraftLauncherClient(ModContainer container) {
-        // Allows NeoForge to create a config screen for this mod's configs.
-        // The config screen is accessed by going to the Mods screen > clicking on your mod > clicking on config.
-        // Do not forget to add translations for your config options to the en_us.json file.
+public final class MinecraftMinecraftLauncherClient {
+    private static final KeyMapping OPEN_LAUNCHER = new KeyMapping(
+            "key.minecraftminecraftlauncher.open_launcher",
+            InputConstants.Type.KEYSYM,
+            InputConstants.KEY_M,
+            KeyMapping.Category.MISC
+    );
+
+    public MinecraftMinecraftLauncherClient(IEventBus modEventBus, ModContainer container) {
         container.registerExtensionPoint(IConfigScreenFactory.class, ConfigurationScreen::new);
+        modEventBus.addListener(this::registerKeyMappings);
+        NeoForge.EVENT_BUS.register(this);
+    }
+
+    private void registerKeyMappings(RegisterKeyMappingsEvent event) {
+        event.register(OPEN_LAUNCHER);
     }
 
     @SubscribeEvent
-    static void onClientSetup(FMLClientSetupEvent event) {
-        // Some client setup code
-        MinecraftMinecraftLauncher.LOGGER.info("HELLO FROM CLIENT SETUP");
-        MinecraftMinecraftLauncher.LOGGER.info("MINECRAFT NAME >> {}", Minecraft.getInstance().getUser().getName());
+    public void onScreenInit(ScreenEvent.Init.Post event) {
+        Screen screen = event.getScreen();
+        if (!(screen instanceof TitleScreen) && !(screen instanceof PauseScreen)) {
+            return;
+        }
+
+        int x = Math.max(4, screen.width - 204);
+        int y = Math.max(4, screen.height - 28);
+        Button button = Button.builder(
+                        Component.translatable("screen.minecraftminecraftlauncher.open"),
+                        ignored -> Minecraft.getInstance().setScreenAndShow(new LauncherScreen(screen)))
+                .bounds(x, y, 200, 20)
+                .build();
+        event.addListener(button);
+    }
+
+    @SubscribeEvent
+    public void onClientTick(ClientTickEvent.Post event) {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.gui.screen() == null && OPEN_LAUNCHER.consumeClick()) {
+            minecraft.setScreenAndShow(new LauncherScreen(null));
+        }
     }
 }
