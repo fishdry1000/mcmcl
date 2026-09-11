@@ -2,24 +2,29 @@ package top.fish1000.mcmcl;
 
 import java.awt.Desktop;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import java.util.stream.Stream;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 
 import net.minecraft.client.Minecraft;
 
-/** Discovers instance directories and handles the small amount of filesystem UI glue. */
+/** Resolves the HMCL repository and handles the small amount of filesystem UI glue. */
 public final class InstanceManager {
     private static final String DIRECTORY_README = """
-            # MCMCL instances
+            # MCMCL HMCL repository
 
-            Create one directory per instance. Each directory needs a launch.json file.
-            See the project's README for the launch.json format and token list.
+            This directory is managed by the standalone HMCL helper.
+            Put standard HMCL/Minecraft version metadata under versions/.
             """;
+    private static final Map<Path, HmclHelperClient> HELPERS = new ConcurrentHashMap<>();
+
+    static {
+        Runtime.getRuntime().addShutdownHook(new Thread(InstanceManager::closeHelpers, "mcmcl-hmcl-shutdown"));
+    }
 
     private InstanceManager() {
     }
@@ -37,38 +42,35 @@ public final class InstanceManager {
         Files.createDirectories(root);
         Path readme = root.resolve("README.md");
         if (Files.notExists(readme)) {
-            Files.writeString(readme, DIRECTORY_README, StandardCharsets.UTF_8);
+            Files.writeString(readme, DIRECTORY_README);
         }
     }
 
     public static DiscoveryResult discover(Minecraft minecraft) throws IOException {
         ensureLayout(minecraft);
-        Path root = instancesDirectory(minecraft);
-        List<InstanceDefinition> instances = new ArrayList<>();
-        List<String> problems = new ArrayList<>();
-
-        try (Stream<Path> children = Files.list(root)) {
-            children.filter(Files::isDirectory)
-                    .sorted(Comparator.comparing(path -> path.getFileName().toString(), String.CASE_INSENSITIVE_ORDER))
+        try {
+            List<HmclInstance> instances = helper(minecraft)
+                    .listInstances()
+                    .get(35, TimeUnit.SECONDS)
+                    .stream()
+                    .sorted(Comparator.comparing(HmclInstance::name, String.CASE_INSENSITIVE_ORDER))
                     .limit(Config.MAX_INSTANCES.get())
-                    .forEach(directory -> {
-                        Path manifest = directory.resolve(InstanceDefinition.MANIFEST_NAME);
-                        if (Files.notExists(manifest)) {
-                            return;
-                        }
-                        try {
-                            instances.add(InstanceDefinition.read(directory));
-                        } catch (Exception exception) {
-                            String message = exception.getMessage() == null
-                                    ? exception.getClass().getSimpleName()
-                                    : exception.getMessage();
-                            problems.add(directory.getFileName() + ": " + message);
-                            MinecraftMinecraftLauncher.LOGGER.warn("Could not read MCMCL instance {}", directory, exception);
-                        }
-                    });
+                    .toList();
+            return new DiscoveryResult(instances, List.of());
+        } catch (Exception exception) {
+            Throwable cause = exception.getCause() == null ? exception : exception.getCause();
+            if (cause instanceof IOException ioException) {
+                throw ioException;
+            }
+            throw new IOException("Could not query the HMCL helper", cause);
         }
+    }
 
-        return new DiscoveryResult(List.copyOf(instances), List.copyOf(problems));
+    public static HmclHelperClient helper(Minecraft minecraft) {
+        Path repository = instancesDirectory(minecraft);
+        Path helperJar = resolveConfiguredPath(Config.HMCL_HELPER_JAR.get(), minecraft.gameDirectory.toPath());
+        Path gameDirectory = minecraft.gameDirectory.toPath().toAbsolutePath().normalize();
+        return HELPERS.computeIfAbsent(repository, ignored -> new HmclHelperClient(repository, helperJar, gameDirectory));
     }
 
     public static void openDirectory(Minecraft minecraft) throws IOException {
@@ -80,7 +82,25 @@ public final class InstanceManager {
         Desktop.getDesktop().open(directory.toFile());
     }
 
-    public record DiscoveryResult(List<InstanceDefinition> instances, List<String> problems) {
+    private static void closeHelpers() {
+        for (HmclHelperClient helper : HELPERS.values()) {
+            try {
+                helper.close();
+            } catch (RuntimeException exception) {
+                MinecraftMinecraftLauncher.LOGGER.debug("Could not close HMCL helper", exception);
+            }
+        }
+        HELPERS.clear();
+    }
+
+    private static Path resolveConfiguredPath(String raw, Path gameDirectory) {
+        Path path = Path.of(raw);
+        return path.isAbsolute()
+                ? path.normalize()
+                : gameDirectory.toAbsolutePath().normalize().resolve(path).normalize();
+    }
+
+    public record DiscoveryResult(List<HmclInstance> instances, List<String> problems) {
         public DiscoveryResult {
             instances = List.copyOf(instances);
             problems = List.copyOf(problems);

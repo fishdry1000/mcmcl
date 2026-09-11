@@ -16,11 +16,12 @@ public final class LauncherScreen extends Screen {
     private static final int ROW_HEIGHT = 32;
 
     private final Screen parent;
-    private List<InstanceDefinition> instances = List.of();
+    private List<HmclInstance> instances = List.of();
     private final List<RowWidgets> rowWidgets = new ArrayList<>();
     private Component status = Component.translatable("screen.minecraftminecraftlauncher.loading");
     private boolean statusError;
     private String latestOutput = "";
+    private boolean initialDiscoveryStarted;
 
     public LauncherScreen(Screen parent) {
         super(Component.translatable("screen.minecraftminecraftlauncher.title"));
@@ -30,7 +31,10 @@ public final class LauncherScreen extends Screen {
     @Override
     protected void init() {
         rowWidgets.clear();
-        reloadInstances();
+        if (!initialDiscoveryStarted) {
+            initialDiscoveryStarted = true;
+            reloadInstances();
+        }
 
         int panelWidth = Math.min(PANEL_WIDTH, Math.max(300, width - 32));
         int left = (width - panelWidth) / 2;
@@ -39,7 +43,7 @@ public final class LauncherScreen extends Screen {
         int visibleRows = Math.max(1, (bottom - rowTop) / ROW_HEIGHT);
 
         for (int index = 0; index < Math.min(visibleRows, instances.size()); index++) {
-            InstanceDefinition instance = instances.get(index);
+            HmclInstance instance = instances.get(index);
             Button button = Button.builder(Component.empty(), ignored -> toggle(instance))
                     .bounds(left + panelWidth - 108, rowTop + index * ROW_HEIGHT, 100, 20)
                     .build();
@@ -49,7 +53,7 @@ public final class LauncherScreen extends Screen {
 
         addRenderableWidget(Button.builder(
                         Component.translatable("screen.minecraftminecraftlauncher.refresh"),
-                        ignored -> minecraft.execute(this::rebuildWidgets))
+                        ignored -> reloadInstances())
                 .bounds(left, height - 32, 100, 20)
                 .build());
         addRenderableWidget(Button.builder(
@@ -93,7 +97,7 @@ public final class LauncherScreen extends Screen {
             );
         } else {
             for (int index = 0; index < Math.min(visibleRows, instances.size()); index++) {
-                InstanceDefinition instance = instances.get(index);
+                HmclInstance instance = instances.get(index);
                 int rowY = rowTop + index * ROW_HEIGHT;
                 graphics.fill(left, rowY - 2, right, rowY + 24, index % 2 == 0 ? 0x22000000 : 0x33000000);
                 String text = instance.name() + "  ·  " + instance.version();
@@ -115,26 +119,36 @@ public final class LauncherScreen extends Screen {
     }
 
     private void reloadInstances() {
-        try {
-            InstanceManager.DiscoveryResult result = InstanceManager.discover(minecraft);
-            instances = result.instances();
-            if (result.problems().isEmpty()) {
-                status = Component.translatable("screen.minecraftminecraftlauncher.found", instances.size());
-                statusError = false;
-            } else {
-                status = Component.translatable(
-                        "screen.minecraftminecraftlauncher.found_with_errors",
-                        instances.size(),
-                        result.problems().size()
-                );
-                statusError = true;
+        status = Component.translatable("screen.minecraftminecraftlauncher.loading");
+        statusError = false;
+        Thread.ofVirtual().name("mcmcl-hmcl-discovery").start(() -> {
+            try {
+                InstanceManager.DiscoveryResult result = InstanceManager.discover(minecraft);
+                minecraft.execute(() -> {
+                    instances = result.instances();
+                    if (result.problems().isEmpty()) {
+                        status = Component.translatable("screen.minecraftminecraftlauncher.found", instances.size());
+                        statusError = false;
+                    } else {
+                        status = Component.translatable(
+                                "screen.minecraftminecraftlauncher.found_with_errors",
+                                instances.size(),
+                                result.problems().size()
+                        );
+                        statusError = true;
+                    }
+                    rebuildWidgets();
+                });
+            } catch (IOException | RuntimeException exception) {
+                minecraft.execute(() -> {
+                    instances = List.of();
+                    status = Component.translatable("screen.minecraftminecraftlauncher.scan_failed");
+                    statusError = true;
+                    rebuildWidgets();
+                });
+                MinecraftMinecraftLauncher.LOGGER.warn("Could not discover HMCL instances", exception);
             }
-        } catch (IOException | RuntimeException exception) {
-            instances = List.of();
-            status = Component.translatable("screen.minecraftminecraftlauncher.scan_failed");
-            statusError = true;
-            MinecraftMinecraftLauncher.LOGGER.warn("Could not discover MCMCL instances", exception);
-        }
+        });
     }
 
     private void openDirectory() {
@@ -149,9 +163,10 @@ public final class LauncherScreen extends Screen {
         }
     }
 
-    private void toggle(InstanceDefinition instance) {
-        if (InstanceLauncher.isRunning(instance.id())) {
-            InstanceLauncher.stop(instance.id());
+    private void toggle(HmclInstance instance) {
+        HmclHelperClient helper = InstanceManager.helper(minecraft);
+        if (helper.isRunning(instance.id())) {
+            helper.stop(instance.id());
             status = Component.translatable("screen.minecraftminecraftlauncher.stopping", instance.name());
             statusError = false;
             return;
@@ -161,12 +176,12 @@ public final class LauncherScreen extends Screen {
         status = Component.translatable("screen.minecraftminecraftlauncher.starting", instance.name());
         statusError = false;
         try {
-            InstanceLauncher.LaunchHandle handle = InstanceLauncher.launch(
+            HmclHelperClient.LaunchHandle handle = helper.launch(
                     instance,
                     minecraft,
                     line -> minecraft.execute(() -> {
                         latestOutput = line;
-                        if (InstanceLauncher.isRunning(instance.id())) {
+                        if (helper.isRunning(instance.id())) {
                             status = Component.translatable("screen.minecraftminecraftlauncher.running", instance.name());
                         }
                     })
@@ -196,7 +211,7 @@ public final class LauncherScreen extends Screen {
 
     private void updateRowButtons() {
         for (RowWidgets row : rowWidgets) {
-            boolean running = InstanceLauncher.isRunning(row.instance().id());
+            boolean running = InstanceManager.helper(minecraft).isRunning(row.instance().id());
             row.button().setMessage(Component.translatable(
                     running
                             ? "screen.minecraftminecraftlauncher.stop"
@@ -205,6 +220,6 @@ public final class LauncherScreen extends Screen {
         }
     }
 
-    private record RowWidgets(InstanceDefinition instance, Button button) {
+    private record RowWidgets(HmclInstance instance, Button button) {
     }
 }

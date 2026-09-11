@@ -5,7 +5,7 @@
   "screen.minecraftminecraftlauncher.found": "找到 %s 个实例",
   "screen.minecraftminecraftlauncher.found_with_errors": "找到 %s 个实例，%s 个配置无效",
   "screen.minecraftminecraftlauncher.scan_failed": "实例扫描失败",
-  "screen.minecraftminecraftlauncher.empty": "没有找到 launch.json 实例",
+  "screen.minecraftminecraftlauncher.empty": "没有找到 HMCL 实例",
   "screen.minecraftminecraftlauncher.launch": "启动",
   "screen.minecraftminecraftlauncher.stop": "停止",
   "screen.minecraftminecraftlauncher.starting": "正在启动 %s……",
@@ -23,7 +23,7 @@
   "minecraftminecraftlauncher.configuration.title": "MCMCL 配置",
   "minecraftminecraftlauncher.configuration.section.minecraftminecraftlauncher.client.toml": "MCMCL 配置",
   "minecraftminecraftlauncher.configuration.section.minecraftminecraftlauncher.client.toml.title": "MCMCL 配置",
-  "minecraftminecraftlauncher.configuration.instancesDirectory": "实例目录",
-  "minecraftminecraftlauncher.configuration.allowCustomJava": "允许自定义 Java",
+  "minecraftminecraftlauncher.configuration.instancesDirectory": "HMCL 仓库目录",
+  "minecraftminecraftlauncher.configuration.hmclHelperJar": "HMCL Helper JAR",
   "minecraftminecraftlauncher.configuration.maxInstances": "最大实例数"
 }

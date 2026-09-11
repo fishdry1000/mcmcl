@@ -5,7 +5,7 @@
   "screen.minecraftminecraftlauncher.found": "%s instance(s) found",
   "screen.minecraftminecraftlauncher.found_with_errors": "%s instance(s) found, %s invalid",
   "screen.minecraftminecraftlauncher.scan_failed": "Instance scan failed",
-  "screen.minecraftminecraftlauncher.empty": "No launch.json instances found",
+  "screen.minecraftminecraftlauncher.empty": "No HMCL instances found",
   "screen.minecraftminecraftlauncher.launch": "Launch",
   "screen.minecraftminecraftlauncher.stop": "Stop",
   "screen.minecraftminecraftlauncher.starting": "Starting %s...",
@@ -23,7 +23,7 @@
   "minecraftminecraftlauncher.configuration.title": "MCMCL Configuration",
   "minecraftminecraftlauncher.configuration.section.minecraftminecraftlauncher.client.toml": "MCMCL Configuration",
   "minecraftminecraftlauncher.configuration.section.minecraftminecraftlauncher.client.toml.title": "MCMCL Configuration",
-  "minecraftminecraftlauncher.configuration.instancesDirectory": "Instances directory",
-  "minecraftminecraftlauncher.configuration.allowCustomJava": "Allow custom Java",
+  "minecraftminecraftlauncher.configuration.instancesDirectory": "HMCL repository directory",
+  "minecraftminecraftlauncher.configuration.hmclHelperJar": "HMCL Helper JAR",
   "minecraftminecraftlauncher.configuration.maxInstances": "Maximum instances"
 }

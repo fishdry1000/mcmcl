@@ -1,95 +1,81 @@
 # MCMCL
 
-MCMCL（Minecraft Minecraft Launcher）是一个运行在 Minecraft 内的 NeoForge 模组。它在游戏内扫描实例目录，并用独立 JVM 子进程启动另一个 Minecraft 实例，因此可以做到“用 Minecraft 启动 Minecraft”。
+MCMCL（Minecraft Minecraft Launcher）是一个运行在 Minecraft 内的 NeoForge 模组。它通过独立的 HMCL helper JVM 管理并启动其他 Minecraft 实例。
 
-当前版本是一个可工作的 MVP：它负责实例发现、游戏内界面、命令构造、子进程输出和停止操作；下载器、版本继承解析和账号登录暂时通过实例文件或外部启动器准备。
+当前启动链路为：
 
-## 使用
+```text
+Minecraft 内 GUI → JSON Lines → mcmcl-hmcl-helper.jar → HMCL Core → 目标 Minecraft
+```
 
-构建并运行开发客户端：
+模组本身不再解析 `launch.json`，也不再直接拼接 Minecraft 启动命令。对于已经准备好的 HMCL 仓库，实例 manifest 的读取/继承、启动参数生成、原生库处理和目标进程管理均由 helper/HMCL Core 负责；缺失文件的下载、校验和 Java 安装仍需由 HMCL 或其他安装流程准备。
+
+## 构建模组
 
 ```powershell
 ./gradlew.bat build
 ./gradlew.bat runClient
 ```
 
-进入标题界面或暂停菜单，点击“打开 MCMCL”，也可以在没有打开界面时按 `M`。默认实例目录是：
+项目目标为 NeoForge 26.2、Java 25。进入标题界面或暂停菜单点击“打开 MCMCL”，也可以按 `M`。
 
-```text
-<Minecraft 游戏目录>/mcmcl/instances/
+## 构建 HMCL helper
+
+helper 的协议代码和 HMCL Core ABI 以 Java 17 为基线；默认协议构建可用 JDK 17。当前 HMCL checkout 的 JavaFX 25 profile 则要求使用 JDK 25 构建、测试和运行，这也与 Minecraft 26.2 一致：
+
+```powershell
+./gradlew.bat -p helper test
+./gradlew.bat -p helper jar
 ```
 
-在这个目录中为每个实例创建一个子目录，并放入 `launch.json`。例如：
+HMCL Core 当前没有稳定的公开 Maven 坐标。真实 HMCL Core adapter 需要使用经过审查的 HMCL 源码 checkout，或先将同一 checkout 的 `HMCLCore` 发布到本机 Maven 仓库。具体流程见 [helper/README.md](helper/README.md)。
+
+将 helper JAR 放到当前 Minecraft 游戏目录的 `mcmcl/hmcl-helper.jar`，或者在 NeoForge 配置中修改 `hmclHelperJar`。HMCL 游戏仓库默认目录为：
 
 ```text
-mcmcl/instances/vanilla-26-2/launch.json
+<Minecraft 游戏目录>/mcmcl/hmcl/
 ```
 
-最小配置示例：
+这是包含 `versions/`、`libraries/` 和 `assets/` 的 HMCL/官方布局根目录。例如实例 manifest 位于：
+
+```text
+mcmcl/hmcl/versions/1.26.2/1.26.2.json
+```
+
+helper 启动参数为：
+
+```text
+java -jar mcmcl-hmcl-helper.jar --repository <HMCL 游戏仓库根目录>
+```
+
+## helper 协议
+
+模组与 helper 通过 stdin/stdout 的 UTF-8 JSON Lines 通信。stdout 只包含协议消息，stderr 用于 helper 自身诊断。
+
+请求示例：
 
 ```json
-{
-  "name": "Vanilla 26.2",
-  "version": "26.2",
-  "java": "${java}",
-  "mainClass": "net.minecraft.client.main.Main",
-  "classpath": [
-    "${minecraftGameDir}/versions/26.2/26.2.jar",
-    "${minecraftGameDir}/libraries/example-library.jar"
-  ],
-  "jvmArgs": ["-Xmx4G"]
-}
+{"id":"1","command":"list"}
+{"id":"2","command":"launch","instanceId":"26.2","username":"Player","uuid":"00000000-0000-0000-0000-000000000000","accessToken":"...","userType":"msa"}
+{"id":"3","command":"stop","instanceId":"26.2"}
 ```
 
-`classpath` 可以写绝对路径，也可以写相对于实例目录或游戏目录的路径；`libraries/`、`versions/`、`assets/` 开头的相对路径会优先按游戏目录解析。省略 `gameArgs` 时，MCMCL 会自动生成标准的版本、游戏目录、资源目录和当前用户参数。
-
-可用变量包括：
-
-| 变量 | 含义 |
-| --- | --- |
-| `${java}` | 当前运行 MCMCL 的 Java 可执行文件 |
-| `${minecraftGameDir}` | 当前 Minecraft 的游戏目录 |
-| `${gameDir}` / `${instanceDir}` | 目标实例目录 |
-| `${assetsDir}` / `${assetIndex}` | 目标资源目录和资源索引 |
-| `${version}` / `${mainClass}` | 实例版本和主类 |
-| `${username}` / `${uuid}` | 当前 Minecraft 用户 |
-| `${accessToken}` / `${sessionId}` | 当前会话凭据 |
-| `${userType}` / `${versionType}` | 启动参数中的用户类型和版本类型 |
-
-如果需要完全控制参数，可以在 `launch.json` 中提供 `gameArgs` 数组。参数是数组元素，不会经过 shell 拼接；这能避免路径中有空格时的常见问题。`jar` 和 `classpath` 二选一：`jar` 使用 `java -jar`，`classpath` 使用 `java -cp <...> <mainClass>`。
-
-## HMCL Core 是否有帮助？
-
-有帮助，但更适合作为“启动后端”，而不是直接塞进 GUI。真正完整的 Minecraft 启动器还需要处理：
-
-- `version.json` 的继承和依赖库规则；
-- 客户端、资源、原生库的下载和校验；
-- Forge/NeoForge/Fabric 等加载器的安装与启动参数；
-- Microsoft 账号登录、刷新令牌和离线模式；
-- Java 版本选择、内存参数和崩溃日志。
-
-这些正是 HMCL Core 或 HMCL 中相关模块能节省大量工作的地方。建议后续把现在的 `InstanceLauncher` 抽象成 `LaunchBackend`/`LaunchPlan`，先保留当前 `launch.json` 后端，再增加 HMCL Core 后端：
-
-```text
-游戏内 GUI → LaunchBackend → LaunchPlan → ProcessBuilder
-                         ├─ ManifestBackend（当前 MVP）
-                         └─ HmclBackend（下载、解析、认证）
-```
-
-不过不能假设 HMCL Core 已经直接兼容 NeoForge 26.2：需要按具体仓库提交和 artifact 的 API、Java 版本、许可证逐项确认，尤其是 Minecraft 26.x 的 Java 25 和非重映射环境。HMCL 相关项目通常带有 GPL 系列许可证，正式发布前也要核对你分发模组时的许可证义务。当前代码没有强行加入 HMCL 依赖，避免先被不稳定的 API 或许可证边界锁死。
+启动请求的响应只表示请求已接受；`started`、`log`、`exit` 和 `error` 通过异步事件返回。协议的完整定义见 [helper/README.md](helper/README.md)。
 
 ## 设计边界
 
-- 启动只发生在物理客户端；服务器端不会加载客户端 UI 和进程代码。
-- 子进程通过参数列表启动，不调用命令行 shell。
-- 实例启动在独立进程中，游戏主线程不会等待它退出。
-- 当前 Minecraft 的用户名、UUID 和 access token 会按变量传给子实例；这不等同于实现了账号登录服务。
-- 配置文件由用户准备，MCMCL 当前不自动下载版本、库或资源。
+- 只有物理客户端启动 helper；专用服务器不会加载客户端启动代码。
+- 目标游戏始终运行在独立 JVM 中，不阻塞 Minecraft 主线程。
+- 当前 Minecraft 的用户名、UUID、access token、XUID 和 client ID 会传给 helper；MCMCL 不实现账号登录或刷新令牌。
+- `launch.json` 已废弃，不再作为启动后端或兼容回退路径。
+- helper 运行时必须遵循 HMCL Core 的 GPL-3.0 条款；发布模组和 helper 前需要一并提供相应许可证与源码/对应源码材料。
+
+默认 helper JAR 只包含协议和仓库发现代码，不能启动游戏；发布或实际使用时必须使用固定 HMCL checkout 构建的 profile JAR。profile JAR 构建会把 checkout 中的 `LICENSE` 放入 `META-INF/licenses/HMCL-LICENSE.txt`，但这不替代对应的 HMCL 源码/对应源码材料。
 
 ## 配置
 
-可在 NeoForge 的模组配置界面中调整：
+NeoForge 客户端配置项：
 
-- `instancesDirectory`：实例根目录，默认 `mcmcl/instances`；
-- `allowCustomJava`：是否允许实例选择不同的 Java 可执行文件；
-- `maxInstances`：扫描的实例目录数量上限。
+- `instancesDirectory`：HMCL 仓库根目录，默认 `mcmcl/hmcl`；
+- `hmclHelperJar`：独立 helper JAR 路径，默认 `mcmcl/hmcl-helper.jar`；
+- `maxInstances`：界面最多显示的实例数量。

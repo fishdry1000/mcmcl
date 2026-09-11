@@ -1,0 +1,143 @@
+plugins {
+    id 'application'
+}
+
+group = 'top.fish1000.mcmcl'
+version = '0.1.0'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
+}
+
+application {
+    mainClass = 'top.fish1000.mcmcl.helper.Main'
+}
+
+repositories {
+    // The helper protocol has no runtime dependencies.  mavenLocal is used
+    // only for the opt-in HMCLCore dependency below.
+    if (project.hasProperty('hmclVersion')) {
+        mavenLocal()
+    }
+    if (project.hasProperty('hmclCheckout') || project.hasProperty('hmclVersion')) {
+        mavenCentral()
+        maven { url = uri('https://jitpack.io') }
+        maven { url = uri('https://libraries.minecraft.net') }
+    }
+}
+
+// Opt in either to a pinned HMCL source checkout (settings.gradle's
+// composite build) or to a locally published HMCLCore artifact.  Keeping the
+// dependency conditional lets the protocol skeleton build without pretending
+// that HMCLCore is available from a public Maven repository.
+def hmclCheckout = project.findProperty('hmclCheckout')
+def hmclVersionProperty = project.findProperty('hmclVersion')
+def hmclProfile = hmclCheckout != null || hmclVersionProperty != null
+def hmclVersion = hmclVersionProperty ?: (hmclCheckout != null ? '3.0' : null)
+def hmclGroup = project.findProperty('hmclGroup') ?: (hmclCheckout != null ? 'org.jackhuang' : 'HMCL3')
+def hmclJavafxVersion = project.findProperty('hmclJavafxVersion') ?: '25'
+def hmclJavafxClassifier = hmclProfile
+        ? (project.findProperty('hmclJavafxClassifier') ?: defaultJavafxClassifier())
+        : null
+
+// Keep profile outputs separate so a previous HMCL build cannot leave stale
+// RealHmclCoreAdapter classes in a later dependency-free build.
+layout.buildDirectory.set(layout.projectDirectory.dir(hmclProfile ? 'build-hmcl' : 'build'))
+
+if (hmclProfile) {
+    // HMCL's current JavaFX runtime is compiled for Java 25.  Keep the
+    // helper sources/Core ABI at release 17 below, but run profile tasks on
+    // the Java 25 runtime that is also required by Minecraft 26.2.
+    java.toolchain.languageVersion = JavaLanguageVersion.of(25)
+
+    // src/hmcl is deliberately invisible in the default build.  It contains
+    // the only source files that import org.jackhuang.hmcl.*.
+    sourceSets.main.java.srcDir('src/hmcl/java')
+
+    dependencies {
+        implementation "${hmclGroup}:HMCLCore:${hmclVersion}"
+        // HMCLCore's public model uses JavaFX properties even in headless
+        // repository/launch code.  HMCL's own build treats these as supplied
+        // by the launcher runtime; the standalone helper must carry them.
+        implementation "org.openjfx:javafx-base:${hmclJavafxVersion}:${hmclJavafxClassifier}"
+        implementation "org.openjfx:javafx-graphics:${hmclJavafxVersion}:${hmclJavafxClassifier}"
+        implementation "org.openjfx:javafx-controls:${hmclJavafxVersion}:${hmclJavafxClassifier}"
+    }
+}
+
+String defaultJavafxClassifier() {
+    String os = System.getProperty('os.name', '').toLowerCase(Locale.ROOT)
+    String arch = System.getProperty('os.arch', '').toLowerCase(Locale.ROOT)
+    if (os.contains('win')) {
+        return arch.contains('aarch64') || arch.contains('arm64') ? 'win-aarch64' : 'win'
+    }
+    if (os.contains('mac') || os.contains('darwin')) {
+        return arch.contains('aarch64') || arch.contains('arm64') ? 'mac-aarch64' : 'mac'
+    }
+    if (os.contains('linux')) {
+        return arch.contains('aarch64') || arch.contains('arm64') ? 'linux-aarch64' : 'linux'
+    }
+    throw new GradleException("Unsupported HMCL JavaFX platform; set -PhmclJavafxClassifier explicitly")
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.release = 17
+}
+
+tasks.register('protocolTest', JavaExec) {
+    group = 'verification'
+    description = 'Runs the dependency-free JSON Lines protocol tests.'
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'top.fish1000.mcmcl.helper.ProtocolTest'
+    systemProperty 'mcmcl.hmcl.profile', hmclProfile.toString()
+}
+
+// Keep `gradlew test` useful without pulling a test framework into the
+// standalone helper.  ProtocolTest is a small executable test suite.
+tasks.named('test') {
+    dependsOn tasks.named('protocolTest')
+    failOnNoDiscoveredTests = false
+}
+
+tasks.named('jar') {
+    manifest {
+        attributes('Main-Class': application.mainClass.get())
+    }
+
+    // The mod starts the helper with `java -jar`, so an HMCL profile must be
+    // deployable as one file.  The default protocol-only profile has no
+    // external runtime dependencies and remains a normal thin JAR.
+    if (hmclProfile) {
+        duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+        exclude('META-INF/*.SF', 'META-INF/*.RSA', 'META-INF/*.DSA')
+        from({
+            configurations.runtimeClasspath.collect { entry ->
+                entry.isDirectory() ? entry : zipTree(entry)
+            }
+        })
+    }
+}
+
+// A profile JAR contains HMCL Core classes, so carry the upstream GPL text
+// with the binary.  The checkout is intentionally not copied into this
+// repository; a release process must retain the exact checkout/commit and
+// provide its corresponding source or a valid written offer alongside the
+// helper artifact.
+if (hmclProfile && hmclCheckout != null) {
+    def hmclLicense = file("${hmclCheckout}/LICENSE")
+    tasks.named('jar') {
+        doFirst {
+            if (!hmclLicense.isFile()) {
+                throw new GradleException("HMCL checkout is missing LICENSE: ${hmclLicense}")
+            }
+        }
+        from(hmclLicense) {
+            into('META-INF/licenses')
+            rename { 'HMCL-LICENSE.txt' }
+        }
+    }
+}

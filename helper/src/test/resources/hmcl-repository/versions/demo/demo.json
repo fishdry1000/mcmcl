@@ -1,0 +1,5 @@
+{
+  "id": "demo",
+  "type": "release",
+  "mainClass": "net.minecraft.client.main.Main"
+}
