@@ -1,0 +1,13 @@
+{
+  "itemGroup.minecraftminecraftlauncher": "Example Mod Tab",
+  "block.minecraftminecraftlauncher.example_block": "Example Block",
+  "item.minecraftminecraftlauncher.example_item": "Example Item",
+
+  "minecraftminecraftlauncher.configuration.title": "Minecraft Minecraft Launcher Configs",
+  "minecraftminecraftlauncher.configuration.section.minecraftminecraftlauncher.common.toml": "Minecraft Minecraft Launcher Configs",
+  "minecraftminecraftlauncher.configuration.section.minecraftminecraftlauncher.common.toml.title": "Minecraft Minecraft Launcher Configs",
+  "minecraftminecraftlauncher.configuration.items": "Item List",
+  "minecraftminecraftlauncher.configuration.logDirtBlock": "Log Dirt Block",
+  "minecraftminecraftlauncher.configuration.magicNumberIntroduction": "Magic Number Text",
+  "minecraftminecraftlauncher.configuration.magicNumber": "Magic Number"
+}
