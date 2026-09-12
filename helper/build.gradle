@@ -87,11 +87,17 @@ if (hmclProfile) {
     dependencies {
         implementation "${hmclGroup}:HMCLCore:${hmclVersion}"
         // HMCLCore's public model uses JavaFX properties even in headless
-        // repository/launch code.  HMCL's own build treats these as supplied
-        // by the launcher runtime; the standalone helper must carry them.
-        implementation "org.openjfx:javafx-base:${hmclJavafxVersion}:${hmclJavafxClassifier}"
-        implementation "org.openjfx:javafx-graphics:${hmclJavafxVersion}:${hmclJavafxClassifier}"
-        implementation "org.openjfx:javafx-controls:${hmclJavafxVersion}:${hmclJavafxClassifier}"
+        // repository/launch code.  Keep JavaFX off the runtime classpath so
+        // the profile JAR stays platform independent: the helper resolves
+        // the modules for the current platform at startup (see
+        // JavaFxBootstrap), and tests run with them on the test classpath
+        // exactly like the bootstrapped helper does.
+        compileOnly "org.openjfx:javafx-base:${hmclJavafxVersion}:${hmclJavafxClassifier}"
+        compileOnly "org.openjfx:javafx-graphics:${hmclJavafxVersion}:${hmclJavafxClassifier}"
+        compileOnly "org.openjfx:javafx-controls:${hmclJavafxVersion}:${hmclJavafxClassifier}"
+        testImplementation "org.openjfx:javafx-base:${hmclJavafxVersion}:${hmclJavafxClassifier}"
+        testImplementation "org.openjfx:javafx-graphics:${hmclJavafxVersion}:${hmclJavafxClassifier}"
+        testImplementation "org.openjfx:javafx-controls:${hmclJavafxVersion}:${hmclJavafxClassifier}"
     }
 }
 

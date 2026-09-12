@@ -14,6 +14,7 @@ import top.fish1000.mcmcl.helper.repository.InstanceDescriptor;
 import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.PipedReader;
 import java.io.PipedWriter;
@@ -50,7 +51,9 @@ public final class ProtocolTest {
         serverBridgesLaunchLifecycleAndStop();
         serverParsesLaunchOptionsAndInstallLifecycle();
         serverCancelsRunningInstall();
-        int testCount = 7;
+        javaFxBootstrapProvisionsAndVerifies();
+        mainParsesJavaFxArguments();
+        int testCount = 9;
         if (Boolean.getBoolean("mcmcl.hmcl.profile")) {
             realHmclCoreLaunchesFixture();
             realHmclCoreInstallsRepairsAndLaunchesFixtureFromLocalServer();
@@ -361,6 +364,107 @@ public final class ProtocolTest {
             }
         }
         return messages;
+    }
+
+    /** Exercises the JavaFX bootstrap against a fake Maven repository. */
+    private static void javaFxBootstrapProvisionsAndVerifies() throws Exception {
+        byte[] jarBytes = "fake javafx jar bytes".getBytes(StandardCharsets.UTF_8);
+        String checksum = sha1(jarBytes);
+        var server = com.sun.net.httpserver.HttpServer.create(
+                new java.net.InetSocketAddress(java.net.InetAddress.getLoopbackAddress(), 0), 0);
+        server.createContext("/", exchange -> {
+            String path = exchange.getRequestURI().getPath();
+            if (!path.contains("/org/openjfx/javafx-")) {
+                exchange.sendResponseHeaders(404, -1);
+                exchange.close();
+                return;
+            }
+            byte[] body = path.endsWith(".sha1")
+                    ? (checksum + "\n").getBytes(StandardCharsets.UTF_8)
+                    : jarBytes;
+            exchange.sendResponseHeaders(200, body.length);
+            try (var output = exchange.getResponseBody()) {
+                output.write(body);
+            }
+        });
+        server.start();
+        Path directory = Files.createTempDirectory("mcmcl-helper-javafx-");
+        try {
+            String classpath = JavaFxBootstrap.ensureModules(
+                    directory, "25", "win", "http://127.0.0.1:" + server.getAddress().getPort());
+            check(classpath.split(java.io.File.pathSeparator).length == 3,
+                    "bootstrap classpath should contain three modules");
+            for (String module : new String[]{"base", "graphics", "controls"}) {
+                check(Files.isRegularFile(directory.resolve("javafx-" + module + ".jar")),
+                        "javafx-" + module + " jar was not provisioned");
+            }
+
+            // A second call must reuse the cached jars without network.
+            server.stop(0);
+            String cached = JavaFxBootstrap.ensureModules(directory, "25", "win", "http://127.0.0.1:1");
+            check(cached.equals(classpath), "cached bootstrap should return the same classpath");
+        } finally {
+            server.stop(0);
+            deleteTree(directory);
+        }
+
+        // A corrupted download must be rejected instead of cached.
+        var badServer = com.sun.net.httpserver.HttpServer.create(
+                new java.net.InetSocketAddress(java.net.InetAddress.getLoopbackAddress(), 0), 0);
+        badServer.createContext("/", exchange -> {
+            byte[] body = exchange.getRequestURI().getPath().endsWith(".sha1")
+                    ? "0123456789012345678901234567890123456789".getBytes(StandardCharsets.UTF_8)
+                    : jarBytes;
+            exchange.sendResponseHeaders(200, body.length);
+            try (var output = exchange.getResponseBody()) {
+                output.write(body);
+            }
+        });
+        badServer.start();
+        Path badDirectory = Files.createTempDirectory("mcmcl-helper-javafx-bad-");
+        try {
+            JavaFxBootstrap.ensureModules(badDirectory, "25", "win",
+                    "http://127.0.0.1:" + badServer.getAddress().getPort());
+            check(false, "checksum mismatch should fail the bootstrap");
+        } catch (IOException expected) {
+            // checksum mismatch surfaces as IOException
+        } finally {
+            badServer.stop(0);
+            deleteTree(badDirectory);
+        }
+    }
+
+    private static void mainParsesJavaFxArguments() throws Exception {
+        Path repository = Files.createTempDirectory("mcmcl-helper-args-");
+        try {
+            Main.HelperArgs args = Main.parseHelperArgs(new String[]{
+                    "--repository", repository.toString(),
+                    "--download-provider", "bmclapi",
+                    "--javafx-version", "21",
+                    "--javafx-dir", "fx",
+                    "--javafx-repo", "http://mirror/maven"});
+            check("bmclapi".equals(args.downloadProvider()), "download provider should parse");
+            check("21".equals(args.javafxVersion()), "javafx version should parse");
+            check(args.javafxDirectory().endsWith("fx"), "javafx dir should parse");
+            check("http://mirror/maven".equals(args.javafxRepository()), "javafx repo should parse");
+
+            Main.HelperArgs defaults = Main.parseHelperArgs(new String[]{"--repository", repository.toString()});
+            check("mojang".equals(defaults.downloadProvider()), "download provider default");
+            check(JavaFxBootstrap.DEFAULT_VERSION.equals(defaults.javafxVersion()), "javafx version default");
+            check(defaults.javafxDirectory().equals(repository.resolve("javafx")),
+                    "javafx dir should default to the repository");
+            check(JavaFxBootstrap.DEFAULT_REPOSITORY.equals(defaults.javafxRepository()),
+                    "javafx repo default");
+        } finally {
+            deleteTree(repository);
+        }
+
+        try {
+            Main.parseHelperArgs(new String[]{"--repository", ".", "--download-provider", "nope"});
+            check(false, "invalid download provider should be rejected");
+        } catch (IllegalArgumentException expected) {
+            // argument validation
+        }
     }
 
     private static void realHmclCoreLaunchesFixture() throws Exception {

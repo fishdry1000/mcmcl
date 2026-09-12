@@ -87,8 +87,10 @@ java -jar mcmcl-hmcl-helper.jar --repository <HMCL 游戏仓库根目录>
 
 默认 helper JAR 只包含协议和仓库发现代码，不能启动游戏；发布或实际使用时必须使用固定 HMCL checkout 构建的 profile JAR。profile JAR 构建会把 checkout 中的 `LICENSE` 放入 `META-INF/licenses/HMCL-LICENSE.txt`，但这不替代对应的 HMCL 源码/对应源码材料。
 
-helper profile 包含当前操作系统/架构的 JavaFX 原生库，因此正式分发应按平台
-分别构建，并把 helper、锁定的 HMCL 提交及对应源码材料作为一组发布。
+profile JAR 是平台无关的单文件：平台相关的 JavaFX 不打包在内，helper 首次
+启动时按当前平台自动下载（可用 `--javafx-dir`/`--javafx-repo` 指定缓存目录
+与镜像，离线机器可预先放入缓存）。发布时把 helper、锁定的 HMCL 提交及对应
+源码材料作为一组发布。
 
 ## 配置
 

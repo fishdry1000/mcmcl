@@ -10,7 +10,7 @@
 - `launch` 支持可选的 `javaPath`（通过运行 `<java> -version` 探测版本）和 `maxMemory`（MB）。
 - `src/hmcl/java/` 已有真实 HMCL Core adapter：headless repository/instance subclass、refresh/list、`AuthInfo`、`LaunchOptions`、`DefaultLauncher`、`ProcessListener` 和 `ManagedProcess` 的桥接，以及上述安装能力。adapter 会初始化 JavaFX 工具包（HMCL Core 的任务进度与快照发布依赖它）和全局 `CacheRepository`（ETag 下载缓存，位于仓库根目录的 `cache/`）。
 - 默认构建不编译 `src/hmcl/java/`，`Main` 通过 provider/factory 得到 `UnavailableHmclCoreAdapter`；它会返回 `HMCL_CORE_UNAVAILABLE`，不会读取或执行 `launch.json`。
-- 传入 `-PhmclCheckout=<固定 checkout>` 或 `-PhmclVersion=<本机发布版本>` 后，Gradle 才把 HMCL 源码 profile 加入编译并让 `Main` 加载真实 provider。profile 构建会把 HMCL Core、传递依赖和当前平台 JavaFX 打进一个可由 `java -jar` 直接启动的 JAR。
+- 传入 `-PhmclCheckout=<固定 checkout>` 或 `-PhmclVersion=<本机发布版本>` 后，Gradle 才把 HMCL 源码 profile 加入编译并让 `Main` 加载真实 provider。profile 构建会把 HMCL Core 及其传递依赖打进一个可由 `java -jar` 直接启动的 JAR；平台相关的 JavaFX 不打包在内，helper 在首次启动时自动按当前平台下载（见下文"JavaFX 运行时"），因此一个 profile JAR 即可跨平台分发。
 
 ## 运行
 
@@ -52,12 +52,24 @@ Git checkout 若有已跟踪文件改动，构建会拒绝继续；仅本地调�
 ```
 
 `installHelper` 写入 `../run/mcmcl/hmcl-helper.jar`，可用
-`-PhelperInstallDirectory=<目录>` 覆盖。profile JAR 包含当前平台的 JavaFX
-原生库，正式二进制应按操作系统和 CPU 架构分别构建、标记和发布。
+`-PhelperInstallDirectory=<目录>` 覆盖。profile JAR 是平台无关的单文件：
+JavaFX 由 helper 在首次启动时按当前平台自行拉取（见"JavaFX 运行时"）。
 
 `--repository` 是包含 `versions/`、`libraries/` 和 `assets/` 的游戏仓库根目录；路径必须存在且为目录。可选的 `--download-provider` 选择安装源：`mojang`（默认，Mojang 官方）、`bmclapi`（_bmclapi2.bangbang93.com 镜像）或任意 BMCLAPI 兼容的 `http(s)://` 根 URL。也可以直接使用 Gradle 的 `run` 任务。
 
-真实 profile 使用 helper 启动 JVM 自己的 `JavaRuntime.getDefault()` 作为 Minecraft Java。协议代码和 HMCL Core ABI 以 Java 17 为基线；默认无依赖构建可用 JDK 17。当前 HMCL checkout 的 JavaFX 25 profile 需要 JDK 25 构建、测试和运行，这也与 Minecraft 26.2 一致。profile 构建输出放在 `helper/build-hmcl/`，默认无依赖构建仍放在 `helper/build/`。构建脚本默认选择 Windows x64 的 JavaFX 25；可用 `-PhmclJavafxVersion` 和 `-PhmclJavafxClassifier` 覆盖版本/平台。
+真实 profile 使用 helper 启动 JVM 自己的 `JavaRuntime.getDefault()` 作为 Minecraft Java。协议代码和 HMCL Core ABI 以 Java 17 为基线；默认无依赖构建可用 JDK 17。当前 HMCL checkout 的 JavaFX 25 profile 则要求使用 JDK 25 构建、测试和运行，这也与 Minecraft 26.2 一致。profile 构建输出放在 `helper/build-hmcl/`，默认无依赖构建仍放在 `helper/build/`。构建期的 JavaFX 编译依赖默认选择 Windows x64 的 25 版本；可用 `-PhmclJavafxVersion` 和 `-PhmclJavafxClassifier` 覆盖。
+
+## JavaFX 运行时
+
+HMCL Core 的任务进度与快照发布依赖 JavaFX。为了让 profile JAR 跨平台，JavaFX 不打包进 JAR：首次启动时 helper 检测 classpath 上没有 JavaFX，就按当前平台（Windows/macOS/Linux × x64/AArch64）从 Maven 仓库下载 `javafx-base`/`javafx-graphics`/`javafx-controls` 三个模块到 `<仓库>/javafx/<版本>-<平台>/`，校验 SHA-1 后带着扩展 classpath 重启自身；此后启动直接复用缓存，不再联网。
+
+相关的启动参数：
+
+- `--javafx-version <v>`：JavaFX 版本，默认 `25`；
+- `--javafx-dir <dir>`：缓存目录，默认 `<仓库>/javafx`；
+- `--javafx-repo <url>`：Maven 仓库根，默认 Maven Central（`https://repo1.maven.org/maven2`），可指向任意镜像（如 `https://maven.aliyun.com/repository/public`）。
+
+离线机器可以预先把平台匹配的三个 jar 放入 `<仓库>/javafx/<版本>-<平台>/`（命名 `javafx-base.jar`、`javafx-graphics.jar`、`javafx-controls.jar`），helper 会直接使用，不做任何网络请求。
 
 stdout 保证只输出协议 JSON；启动参数错误写入 stderr，helper 进程退出码为 2。正常 EOF 或 `shutdown` 的退出码为 0；游戏本身的退出码只通过 `exit` 事件传递。
 
@@ -155,7 +167,7 @@ git -C C:\src\HMCL checkout <经过审查的固定提交>
 .\gradlew -p helper "-PhmclCheckout=C:\src\HMCL" installDist
 ```
 
-该参数会把 `org.jackhuang:HMCLCore` 替换为 checkout 中的 `:HMCLCore` 项目，并编译 `src/hmcl/java`。需要注意：这是完整 HMCL Gradle 构建，不是下载一个轻量 jar；首次构建会解析 HMCL 的构建逻辑和 Core 依赖。profile 的 `jar` 已包含 HMCL Core、传递依赖和当前平台 JavaFX；`installDist` 仍可用于检查/分发展开后的依赖目录。正式发布前应把 checkout 固定到已审查的提交，而不是跟随 `main`。
+该参数会把 `org.jackhuang:HMCLCore` 替换为 checkout 中的 `:HMCLCore` 项目，并编译 `src/hmcl/java`。需要注意：这是完整 HMCL Gradle 构建，不是下载一个轻量 jar；首次构建会解析 HMCL 的构建逻辑和 Core 依赖。profile 的 `jar` 包含 HMCL Core 和传递依赖（JavaFX 除外，运行时由 helper 拉取）；`installDist` 仍可用于检查/分发展开后的依赖目录。正式发布前应把 checkout 固定到已审查的提交，而不是跟随 `main`。
 
 方案 B：先在固定 checkout 中发布到本机 Maven 仓库：
 
@@ -181,7 +193,7 @@ helper 的 `build.gradle` 只在传入 `hmclVersion` 或 `hmclCheckout` 时启�
 4. 创建 `DefaultLauncher`，把 `ProcessListener.onLog`、`onExit` 映射为 `HmclLaunchEventSink`；
 5. 保存 HMCL 的 `ManagedProcess`/任务句柄，在 `stop` 和 `shutdown` 中终止游戏进程；
 6. `install`/`repair` 通过 `DefaultDependencyManager` 的 `newGameBuilder`/`checkGameCompletionAsync` 执行，任务用 `TaskExecutor` 启动并等待（`whenComplete` 组合子依赖 executor 维护的状态，不能用裸 `Task.run()`）；取消通过中断 + `TaskExecutor.cancel()`；
-7. 给 helper 分发 HMCL Core 所需的 JavaFX runtime modules 和其传递依赖，并在发布前完成 GPL-3.0 合规审查。
+7. 发布前完成 GPL-3.0 合规审查；JavaFX 不随 JAR 分发，由 helper 启动时按平台拉取。
 
 当前已验证真实 profile 能启动 headless helper、完成 `hello`/`list`/`shutdown`，
 并通过动态 JVM fixture 验证 `DefaultLauncher` 的实际进程启动、stdout/stderr
