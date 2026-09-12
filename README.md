@@ -1,95 +1,66 @@
 # MCMCL
 
-MCMCL（Minecraft Minecraft Launcher）是一个运行在 Minecraft 内的 NeoForge 模组：在游戏里直接管理、安装并启动其他 Minecraft 实例。实例发现、manifest 继承、启动参数生成、原生库处理、下载安装与目标进程管理全部由独立 helper JVM 中的 HMCL Core 完成，模组本身只负责 GUI 与协议通信：
+运行在 Minecraft 里的启动器模组。不用退出游戏，就能安装、启动和管理其他 Minecraft 实例。
 
-```text
-Minecraft 内 GUI → JSON Lines（stdin/stdout）→ mcmcl-hmcl-helper.jar → HMCL Core → 目标 Minecraft
-```
+本体是一个 [NeoForge](https://neoforged.net/) 模组，实例的下载安装和启动由内置的 HMCL 启动后端完成，不需要单独安装其他软件。
 
 ## 功能
 
-- **启动/停止** HMCL 仓库中的已有实例，实时查看目标进程日志；
-- **安装**新实例：原版，或叠加 Fabric/Forge/NeoForge/Quilt/OptiFine 加载器组件（HMCL `GameBuilder` 组件链，从 Mojang 官方源或 BMCLAPI 镜像下载）；
-- **修复**已有实例缺失的客户端 jar、库与资源文件；
-- **账号**：沿用当前 Minecraft 会话，或使用离线账号（`OfflinePlayer` UUID，用户名可配置）；
-- **启动设置**：目标 Java 路径、最大内存；
-- **开箱即用**：模组 JAR 内置 helper，缺失时自动解压，模组更新时自动刷新。
+- 安装新实例：原版，以及 Fabric / Forge / NeoForge / Quilt / OptiFine
+- 一键修复实例缺失的文件
+- 启动、停止实例，实时查看日志
+- 使用离线账号，或沿用当前登录的微软账号
+- 可以为实例指定 Java 路径和内存大小
 
-`launch.json` 已废弃：模组不再解析它，也不存在回退路径。
+## 安装
 
-## 构建
+1. 从 [Releases](../../releases) 下载模组 JAR，放入 `mods` 文件夹；
+2. 使用 NeoForge 26.2 启动游戏。
 
-| 工程 | 目录 | 说明 |
-|---|---|---|
-| NeoForge 模组 | 仓库根目录 | 游戏内启动器 UI + helper 进程客户端 |
-| Helper | `helper/`（独立 Gradle 工程） | 封装 HMCL Core 的 JSON Lines 后端 |
+后端所需的文件已全部内置，首次打开时自动就位；安装实例时会联网下载游戏文件。
 
-开发环境为 Windows（`gradlew.bat`），Linux/macOS 用 `./gradlew`。目标为 NeoForge 26.2 / Minecraft 26.2 / Java 25；helper 协议代码以 Java 17 为基线。
+## 使用
 
-### 模组
+在标题界面或暂停菜单点击「打开 MCMCL」，也可以按 `M`。
 
-```powershell
-./gradlew.bat build        # 产物在 build/libs/
-./gradlew.bat runClient    # 开发客户端
-```
+- **安装**：点「安装实例」，选好游戏版本（可选加载器），等待下载完成；
+- **启动**：在实例列表点「启动」，日志会实时显示在下方，「停止」可以结束游戏；
+- **修复**：实例缺文件打不开时，删除坏掉的文件后再启动，缺什么补什么。
 
-模组构建会自动把 `helper/build-hmcl/libs` 下最新的 profile JAR 打包进模组；没有 profile 产物时仅告警跳过，`-PrequireHelperEmbed=true` 可强制失败。
-
-### Helper
-
-```powershell
-# 无依赖的协议构建（JDK 17 即可）：仅协议与仓库发现，不能启动游戏
-./gradlew.bat -p helper test
-./gradlew.bat -p helper jar
-
-# 真实 HMCL profile（需 JDK 25）：可启动游戏、安装/修复实例
-./gradlew.bat -p helper "-PhmclCheckout=C:\src\HMCL" clean test installHelper
-```
-
-- HMCL Core 没有稳定的公开 Maven 坐标，profile 构建需要固定一份经过审查的 HMCL 源码 checkout，具体流程与固定提交校验见 [helper/README.md](helper/README.md)。
-- `installHelper` 把 profile JAR 复制到 `run/mcmcl/hmcl-helper.jar`（开发运行目录），可用 `-PhelperInstallDirectory=<目录>` 覆盖。
-- profile JAR **平台无关**：JavaFX 不打包在内，helper 首次启动时按当前平台自动下载并缓存（离线机器可预置缓存），见 [helper/README.md](helper/README.md) 的“JavaFX 运行时”。
-- profile JAR 内含 HMCL Core（GPL-3.0），构建会把 checkout 的 `LICENSE` 放入 `META-INF/licenses/HMCL-LICENSE.txt`；发布时必须随附对应源码/源码获取方式。
-
-## 运行
-
-把模组 JAR 放进 `mods/` 即可。进入标题/暂停界面点击“打开 MCMCL”（或按 `M`），模组会自动解压内置 helper 并启动。游戏仓库默认位于：
-
-```text
-<Minecraft 游戏目录>/mcmcl/hmcl/
-```
-
-这是包含 `versions/`、`libraries/`、`assets/` 的 HMCL/官方布局根目录（实例 manifest 形如 `mcmcl/hmcl/versions/26.2/26.2.json`）。也可以把配置项 `instancesDirectory` 指向任意 HMCL 实例目录，或点“打开实例文件夹”后手动放入。
-
-helper 也可以独立运行（调试用）：
-
-```text
-java -jar mcmcl-hmcl-helper.jar --repository <HMCL 游戏仓库根目录>
-```
-
-## helper 协议
-
-模组与 helper 通过 stdin/stdout 的 UTF-8 JSON Lines 通信：stdout 只输出协议消息，诊断写 stderr；退出码 0 表示正常结束，2 表示启动参数错误。
-
-模组启动 helper 后先发送 `hello` 校验协议版本，并读取 helper 版本、HMCL 固定提交与能力位（`launchAvailable`/`installAvailable`）。`launch`/`install`/`repair` 是异步操作：响应 `ok:true` 只表示请求已接受，结果通过 `started`/`log`/`exit`/`error` 事件返回。完整协议（命令、字段、错误码、事件）见 [helper/README.md](helper/README.md)。
-
-## 设计边界
-
-- 只有物理客户端加载启动器代码；专用服务器不受影响。
-- 目标游戏运行在独立 JVM 中，不阻塞 Minecraft 主线程。
-- 当前会话凭据（用户名/UUID/token/XUID/clientId）透传给 helper，离线模式下由模组生成离线凭据；MCMCL 不实现微软登录或令牌刷新。
-- Forge/NeoForge/Quilt 安装器链尚未对真实镜像服务器做联网验收（Fabric 已在本地 fixture 验证）。
-- helper 运行时必须遵循 HMCL Core 的 GPL-3.0 条款；发布模组和 helper 需一并提供对应源码材料。
+首次使用建议先到 NeoForge 配置里看一眼账号设置：默认沿用当前登录的微软账号；想用离线账号就打开 `offlineMode` 并填好用户名（离线账号只能进离线服务器）。
 
 ## 配置
 
-NeoForge 客户端配置项：
+| 配置项 | 说明 | 默认值 |
+|---|---|---|
+| `instancesDirectory` | 实例仓库目录 | `mcmcl/hmcl` |
+| `hmclHelperJar` | 启动后端 JAR 位置（一般不用改） | `mcmcl/hmcl-helper.jar` |
+| `offlineMode` | 使用离线账号 | 关 |
+| `offlineUsername` | 离线账号用户名 | 当前账号名 |
+| `javaPath` | 启动实例用的 Java，留空用游戏自带 | 空 |
+| `maxMemory` | 实例最大内存（MB），0 为自动 | 0 |
+| `downloadProvider` | 下载源：`mojang` 或 `bmclapi` | `mojang` |
+| `maxInstances` | 列表最多显示的实例数 | 32 |
 
-- `instancesDirectory`：HMCL 仓库根目录，默认 `mcmcl/hmcl`；
-- `hmclHelperJar`：helper JAR 路径，默认 `mcmcl/hmcl-helper.jar`；缺失时自动解压模组内置的 helper，模组更新时自动刷新，自己放置的 JAR 不会被覆盖；
-- `maxInstances`：界面最多显示的实例数量；
-- `offlineMode`：使用离线账号而不是当前 Minecraft 会话；
-- `offlineUsername`：离线账号用户名，留空时沿用当前会话用户名；
-- `javaPath`：目标游戏使用的 Java 可执行文件路径，留空时使用 helper 自身的 Java；
-- `maxMemory`：目标游戏最大内存（MB），0 表示由 HMCL 决定；
-- `downloadProvider`：安装实例时的下载源，`mojang`（默认）或 `bmclapi`。
+## 常见问题
+
+**下载慢或者失败？** 把 `downloadProvider` 改成 `bmclapi`（国内镜像）再试。
+
+**提示 Java 版本不合适？** 在 `javaPath` 里指定一个合适的 Java；不确定就留空，默认使用与游戏相同的 Java。
+
+**能登录微软账号吗？** MCMCL 不做账号登录，离线模式之外都是沿用你启动 Minecraft 时登录的账号。
+
+## 从源码构建
+
+需要 JDK 25：
+
+```powershell
+gradlew.bat -p helper "-PhmclCheckout=<HMCL 源码目录>" clean test installHelper
+gradlew.bat build
+```
+
+构建细节、启动后端协议与开发说明见 [helper/README.md](helper/README.md)。
+
+## 许可证
+
+模组代码保留所有权利（All Rights Reserved）。内置的启动后端包含 [HMCL](https://github.com/HMCL-dev/HMCL) 的组件（GPL-3.0），分发时附带其许可证与源码获取方式。
