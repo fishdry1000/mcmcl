@@ -49,7 +49,13 @@ public final class MinecraftMinecraftLauncherClient {
         }
 
         int x = Math.max(4, screen.width - 204);
-        int y = Math.max(4, screen.height - 28);
+        // The title screen keeps the button between the quit row (ending at
+        // height/4 + 148 in NeoForge's shifted layout) and the copyright text
+        // at height - 10, preferring the bottom edge when both fit.  The
+        // pause screen has a free bottom edge.
+        int y = screen instanceof TitleScreen
+                ? Math.min(screen.height - 32, Math.max(screen.height / 4 + 152, screen.height - 48))
+                : Math.max(4, screen.height - 28);
         Button button = Button.builder(
                         Component.translatable("screen.minecraftminecraftlauncher.open"),
                         ignored -> Minecraft.getInstance().setScreenAndShow(new LauncherScreen(screen)))
