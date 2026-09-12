@@ -82,10 +82,24 @@ public final class InstanceManager {
     public static void openDirectory(Minecraft minecraft) throws IOException {
         Path directory = instancesDirectory(minecraft);
         ensureLayout(minecraft);
-        if (!Desktop.isDesktopSupported()) {
-            throw new IOException("Desktop integration is not available in this environment");
+        String os = System.getProperty("os.name", "").toLowerCase();
+        String[] command;
+        if (os.contains("win")) {
+            command = new String[]{"explorer.exe", directory.toString()};
+        } else if (os.contains("mac") || os.contains("darwin")) {
+            command = new String[]{"open", directory.toString()};
+        } else {
+            command = new String[]{"xdg-open", directory.toString()};
         }
-        Desktop.getDesktop().open(directory.toFile());
+        try {
+            new ProcessBuilder(command).start();
+        } catch (IOException exception) {
+            // Fall back to Desktop on platforms without the shell opener.
+            if (!Desktop.isDesktopSupported()) {
+                throw exception;
+            }
+            Desktop.getDesktop().open(directory.toFile());
+        }
     }
 
     private static void closeHelpers() {

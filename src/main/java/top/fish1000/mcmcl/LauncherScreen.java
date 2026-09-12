@@ -57,26 +57,27 @@ public final class LauncherScreen extends Screen {
             addRenderableWidget(button);
         }
 
+        ButtonRowLayout.Geometry bottomRow = ButtonRowLayout.centered(left, panelWidth, 8, 100, 160, 100, 100);
         addRenderableWidget(Button.builder(
                         Component.translatable("screen.minecraftminecraftlauncher.refresh"),
                         ignored -> reloadInstances())
-                .bounds(left, height - 32, 100, 20)
+                .bounds(bottomRow.x()[0], height - 32, bottomRow.width()[0], 20)
                 .build());
         addRenderableWidget(Button.builder(
                         Component.translatable("screen.minecraftminecraftlauncher.open_directory"),
                         ignored -> openDirectory())
-                .bounds(left + 108, height - 32, 160, 20)
+                .bounds(bottomRow.x()[1], height - 32, bottomRow.width()[1], 20)
                 .build());
         installButton = Button.builder(
                         Component.translatable("screen.minecraftminecraftlauncher.install"),
                         ignored -> minecraft.setScreenAndShow(new InstallScreen(this)))
-                .bounds(left + 276, height - 32, 100, 20)
+                .bounds(bottomRow.x()[2], height - 32, bottomRow.width()[2], 20)
                 .build();
         addRenderableWidget(installButton);
         addRenderableWidget(Button.builder(
                         Component.translatable("gui.done"),
                         ignored -> onClose())
-                .bounds(left + panelWidth - 100, height - 32, 100, 20)
+                .bounds(bottomRow.x()[3], height - 32, bottomRow.width()[3], 20)
                 .build());
         updateRowButtons();
     }
