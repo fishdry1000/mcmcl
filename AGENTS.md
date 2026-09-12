@@ -67,7 +67,7 @@ Minecraft 内 GUI → JSON Lines（stdin/stdout）→ mcmcl-hmcl-helper.jar → 
 - profile 构建输出在 `helper/build-hmcl/`（刻意与 `helper/build/` 分离 — 避免旧适配器类混入无依赖构建）。
 - profile JAR 不打包 JavaFX：helper 首次启动时按当前平台从 Maven 仓库拉取（`JavaFxBootstrap`，缓存于 `<仓库>/javafx/<版本>-<平台>/`，可用 `--javafx-version/--javafx-dir/--javafx-repo` 覆盖），因此一个 profile JAR 跨平台分发。构建/测试期的 JavaFX 依赖默认取宿主平台的 classifier，可用 `-PhmclJavafxClassifier` 覆盖。
 - 模组元数据（`neoforge.mods.toml`）由 `src/main/templates/` 以根 `gradle.properties` 的属性展开生成（`generateModMetadata` 任务）。
-- HMCL Core 为 GPL-3.0：profile JAR 必须附带 `META-INF/licenses/HMCL-LICENSE.txt` 及对应源码/源码获取方式。模组本身为"All Rights Reserved"。
+- 本项目以 GPL-3.0 发布（根 `LICENSE`，与 HMCL Core 一致；`mod_license` 已在 `gradle.properties`）。profile JAR 仍须附带 `META-INF/licenses/HMCL-LICENSE.txt` 及对应源码/源码获取方式。
 
 ## 仓库杂项
 

@@ -63,4 +63,4 @@ gradlew.bat build
 
 ## 许可证
 
-模组代码保留所有权利（All Rights Reserved）。内置的启动后端包含 [HMCL](https://github.com/HMCL-dev/HMCL) 的组件（GPL-3.0），分发时附带其许可证与源码获取方式。
+本项目以 [GPL-3.0](LICENSE) 许可证发布，与内置启动后端所依赖的 [HMCL](https://github.com/HMCL-dev/HMCL) 保持一致。

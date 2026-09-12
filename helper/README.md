@@ -33,7 +33,7 @@ java -jar helper\build-hmcl\libs\mcmcl-hmcl-helper-0.1.0.jar --repository C:\pat
 
 - profile 构建输出在 `helper/build-hmcl/`（刻意与 `helper/build/` 分离，避免旧适配器类混入无依赖构建）。
 - profile JAR 包含 HMCL Core 和传递依赖，**不含 JavaFX**（运行时按平台拉取，见下文），因此平台无关、单文件分发。
-- profile JAR 会从 checkout 复制 `LICENSE` 到 `META-INF/licenses/HMCL-LICENSE.txt`；按 GPL-3.0 发布时仍须提供对应源码或有效的源码获取方式。
+- profile JAR 会从 checkout 复制 `LICENSE` 到 `META-INF/licenses/HMCL-LICENSE.txt`；本项目与 HMCL 同为 GPL-3.0，发布时仍须提供对应源码或有效的源码获取方式。
 - `installHelper` 写入 `../run/mcmcl/hmcl-helper.jar`，可用 `-PhelperInstallDirectory=<目录>` 覆盖；也可以直接使用 Gradle 的 `run` 任务。
 - 固定提交记录在 `helper/gradle.properties` 的 `hmclPinnedCommit`。Git checkout 会校验 HEAD 与之一致，且拒绝带脏改动（本地调试豁免 `-PhmclAllowDirty=true`，该产物不应发布）；不含 `.git` 的源码压缩包无法自动校验，构建只把提交写入 JAR 元数据，发布者须自行确认来源。可用 `-PhmclCommit=<commit>` 覆盖记录值。
 - 构建期的 JavaFX 编译依赖默认取宿主平台 classifier、版本 25；可用 `-PhmclJavafxVersion` 和 `-PhmclJavafxClassifier` 覆盖。
