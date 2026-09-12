@@ -203,8 +203,11 @@ helper 的 `build.gradle` 只在传入 `hmclVersion` 或 `hmclCheckout` 时启�
 均带 SHA-1 校验地下载落盘）、删除客户端 jar 后的 `repair` 补齐、**Fabric
 加载器实例**（假 fabric-meta 端点提供加载器列表与 launch meta，安装产物含
 fabric 补丁与库文件，并能启动合并后的实例）、以及"安装后启动该实例"的全链路。
-对真实 Mojang/BMCLAPI 服务器与 Forge/NeoForge/Quilt 安装器链的下载验收需要
-联网环境，仍需单独验收。
+跨平台方面，helper 已在 **Linux**（WSL2 Ubuntu 24.04 + JDK 25）实测通过：
+bootstrap 识别 linux classifier、从 Maven Central 下载 JavaFX linux 模块并
+缓存复用、JavaFX 工具包启动、`install` 从 Mojang 真实下载 264MB 原版实例、
+删除客户端 jar 后 `repair` 补齐。Forge/NeoForge/Quilt 安装器链的下载验收
+仍需单独验收。
 
 ## 目录
 
