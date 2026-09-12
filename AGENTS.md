@@ -2,7 +2,7 @@
 
 ## 仓库简介
 
-MCMCL（Minecraft Minecraft Launcher）是一个运行在 Minecraft 内的 NeoForge 模组（目标 Minecraft 26.2），通过独立的 helper JVM 启动其他 Minecraft 实例：
+MCMCL（Minecraft Minecraft Launcher）是一个运行在 Minecraft 内的 NeoForge 模组（目标 Minecraft 26.2），通过独立的 helper JVM 启动、安装与管理其他 Minecraft 实例：
 
 ```
 Minecraft 内 GUI → JSON Lines（stdin/stdout）→ mcmcl-hmcl-helper.jar → HMCL Core → 目标 Minecraft
@@ -44,7 +44,7 @@ Minecraft 内 GUI → JSON Lines（stdin/stdout）→ mcmcl-hmcl-helper.jar → 
 **模组侧**（`src/main/java/top/fish1000/mcmcl/`）：
 - `MinecraftMinecraftLauncher` — 公共 `@Mod` 入口；保持不含任何客户端类，确保专用服务器不会加载启动器代码。
 - `MinecraftMinecraftLauncherClient` — `@Mod(dist = Dist.CLIENT)` 客户端入口；注册快捷键 `M`，在标题/暂停界面添加按钮。
-- `HmclHelperClient` — 启动并管理 helper JVM 进程，负责协议通信；`LauncherScreen` 与 `InstanceManager` 是界面和实例列表；`Config` 是 NeoForge 客户端配置（`instancesDirectory`、`hmclHelperJar`、`maxInstances`）。
+- `HmclHelperClient` — 启动并管理 helper JVM 进程，负责协议通信；`LauncherScreen`/`InstallScreen` 是实例与安装界面，`InstanceManager` 负责实例发现与 helper 复用，`HelperBundle` 负责解压内置 helper；`Config` 是 NeoForge 客户端配置（仓库/helper 路径、离线账号、Java、内存、下载源等）。
 
 **Helper 侧**（`helper/src/`）：
 - `Main`/`HelperServer` — JSON Lines 服务循环与请求分发。
@@ -56,7 +56,7 @@ Minecraft 内 GUI → JSON Lines（stdin/stdout）→ mcmcl-hmcl-helper.jar → 
 
 - `stdout` **只**输出协议 JSON；所有诊断信息写到 `stderr`。helper 退出码：0 = 正常 EOF/`shutdown`，2 = 启动参数错误。
 - 模组总是先发送 `hello`；响应与日志绝不能记录或回显 `accessToken`。
-- `launch` 是异步操作：`ok:true` 只表示请求已接受；结果通过 `started` / `log` / `exit` / `error` 事件返回。
+- `launch`/`install`/`repair` 是异步操作：`ok:true` 只表示请求已接受；结果通过 `started`（仅 launch）/ `log` / `exit` / `error` 事件返回。
 - 错误码：`INVALID_REQUEST`、`UNKNOWN_COMMAND`、`HMCL_CORE_UNAVAILABLE`、`ALREADY_RUNNING`、`NOT_RUNNING`、`CANCELLED`、`INTERNAL_ERROR`（事件中还有 `HMCL_CORE_ERROR`）。
 - `launch.json` 是**已废弃**的后端 — 不要重新引入，也不要作为回退路径。
 - 任何协议变更必须同步修改模组的 `HmclHelperClient`、helper 的 `HelperServer`，以及 `helper/README.md`。
