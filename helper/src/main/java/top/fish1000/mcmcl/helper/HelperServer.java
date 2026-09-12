@@ -105,7 +105,7 @@ public final class HelperServer {
                 case "launch" -> launch(id, request);
                 case "install" -> install(id, request);
                 case "repair" -> repair(id, request);
-                case "remoteVersions" -> remoteVersions(id);
+                case "remoteVersions" -> remoteVersions(id, request);
                 case "stop" -> stop(id, request);
                 case "shutdown" -> {
                     respondOk(id, "shutdown requested");
@@ -152,14 +152,27 @@ public final class HelperServer {
         }
     }
 
-    private void remoteVersions(Object id) {
+    private void remoteVersions(Object id, Map<String, Object> request) {
+        String component;
+        String gameVersion;
+        try {
+            component = Json.optionalString(request, "component");
+            gameVersion = Json.optionalString(request, "gameVersion");
+            if (component != null && gameVersion == null) {
+                throw new ProtocolException("gameVersion is required when component is set");
+            }
+        } catch (ProtocolException e) {
+            respondError(id, CODE_INVALID_REQUEST, e.getMessage());
+            return;
+        }
+
         if (!adapter.isInstallAvailable()) {
             respondError(id, CODE_HMCL_CORE_UNAVAILABLE, adapter.unavailableMessage());
             return;
         }
         try {
             List<Map<String, Object>> versions = new ArrayList<>();
-            for (var version : adapter.listRemoteVersions()) {
+            for (var version : adapter.listRemoteVersions(component, gameVersion)) {
                 versions.add(version.toJson());
             }
             Map<String, Object> body = new LinkedHashMap<>();

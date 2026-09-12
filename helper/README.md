@@ -80,7 +80,7 @@ stdout 保证只输出协议 JSON；启动参数错误写入 stderr，helper 进
 
 `launch` 的必填字段是 `instanceId`、`username`、`uuid`、`accessToken`、`userType`；`xuid`、`clientId`、`javaPath` 和 `maxMemory` 可选。`javaPath` 指向目标游戏使用的 Java 可执行文件（helper 会运行 `-version` 探测版本）；`maxMemory` 是最大堆（MB）。离线账号由模组侧构造：`uuid` 使用 `OfflinePlayer:<用户名>` 的 nameUUID，`accessToken` 使用随机 UUID，`userType` 仍为 `msa`。当前协议不携带 `userProperties`，真正的 HMCL 适配器会在内部按账号类型构造对应的属性 JSON。
 
-`install` 创建新的原版实例（`instanceId` 必须不存在，`gameVersion` 为要安装的版本 id）；`repair` 为已有实例补齐缺失的客户端 jar、库与资源文件。两者都是异步操作，复用 `launch` 的事件模型但没有 `started` 事件：进度通过 `log` 事件返回，成功以 `exit`(code 0) 结束，失败以 `error` 事件结束。安装串行执行（HMCL 仓库一次只允许一个独占 draft），重复请求返回 `ALREADY_RUNNING`；安装进行中的 `launch` 会直接失败。`stop` 现在同时作用于启动槽与安装/修复槽；安装取消是尽力而为（中断 + `TaskExecutor.cancel()`），关闭 helper 始终可靠终止。
+`install` 创建新的实例；除 `gameVersion` 外还可以携带可选的 `loaders` 数组（HMCL 组件 patch id + 版本，如 `{"type":"fabric","version":"0.16.9"}`），helper 通过 HMCL Core 的 `GameBuilder` 组件链安装 Fabric/Forge/NeoForge/Quilt/OptiFine 等加载器；`repair` 为已有实例补齐缺失的客户端 jar、库与资源文件。两者都是异步操作，复用 `launch` 的事件模型但没有 `started` 事件：进度通过 `log` 事件返回，成功以 `exit`(code 0) 结束，失败以 `error` 事件结束。安装串行执行（HMCL 仓库一次只允许一个独占 draft），重复请求返回 `ALREADY_RUNNING`；安装进行中的 `launch` 会直接失败。`stop` 现在同时作用于启动槽与安装/修复槽；安装取消是尽力而为（中断 + `TaskExecutor.cancel()`），关闭 helper 始终可靠终止。
 
 模组在其他请求前自动发送 `hello`。它返回协议版本、helper 版本、后端名称、是否具备真实启动/安装能力以及构建所对应的 HMCL 提交，例如：
 
@@ -97,7 +97,7 @@ JAR 会报告 `backend:"unavailable"`、`launchAvailable:false` 和 `installAvai
 {"type":"response","id":"rv1","ok":true,"versions":[{"id":"26.2","type":"release","releaseTime":"2026-06-09T12:05:32+00:00"}]}
 ```
 
-`versions` 按发布时间从新到旧排序，覆盖全部类型（release/snapshot/old 等），由调用方自行过滤。未接入 HMCL Core 时返回 `HMCL_CORE_UNAVAILABLE`。
+请求可以携带可选的 `component`（HMCL patch id，如 `fabric`/`forge`/`neoforge`/`quilt`/`optifine`）和 `gameVersion`，用于列出该游戏版本可用的加载器版本（`id` 为组件版本号）。不带参数时返回全部游戏版本，按发布时间从新到旧排序。component 必须与 gameVersion 同时提供，否则返回 `INVALID_REQUEST`；未接入 HMCL Core 时返回 `HMCL_CORE_UNAVAILABLE`。
 
 ### 响应
 
@@ -188,9 +188,11 @@ helper 的 `build.gradle` 只在传入 `hmclVersion` 或 `hmclCheckout` 时启�
 转发和退出事件；也已用完整 Minecraft 26.2 文件集创建目标 Minecraft 进程、
 转发真实日志并通过 `stop` 结束。安装路径由本地 BMCLAPI 兼容 fixture 服务器
 验收：`remoteVersions` 列表、全新 `install`（版本 JSON、客户端 jar、资源索引
-均带 SHA-1 校验地下载落盘）、删除客户端 jar 后的 `repair` 补齐，以及"安装后
-启动该实例"的全链路。对真实 Mojang/BMCLAPI 服务器的下载验收需要联网环境，
-模组加载器实例（Forge/Fabric/NeoForge）仍需单独验收。
+均带 SHA-1 校验地下载落盘）、删除客户端 jar 后的 `repair` 补齐、**Fabric
+加载器实例**（假 fabric-meta 端点提供加载器列表与 launch meta，安装产物含
+fabric 补丁与库文件，并能启动合并后的实例）、以及"安装后启动该实例"的全链路。
+对真实 Mojang/BMCLAPI 服务器与 Forge/NeoForge/Quilt 安装器链的下载验收需要
+联网环境，仍需单独验收。
 
 ## 目录
 

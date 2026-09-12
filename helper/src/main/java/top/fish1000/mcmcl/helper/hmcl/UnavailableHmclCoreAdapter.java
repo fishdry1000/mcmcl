@@ -39,7 +39,7 @@ public final class UnavailableHmclCoreAdapter implements HmclCoreAdapter {
     }
 
     @Override
-    public List<RemoteVersionDescriptor> listRemoteVersions() {
+    public List<RemoteVersionDescriptor> listRemoteVersions(String component, String gameVersion) {
         throw new UnsupportedOperationException(unavailableMessage());
     }
 

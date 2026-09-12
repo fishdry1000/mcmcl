@@ -35,12 +35,14 @@ public interface HmclCoreAdapter {
     }
 
     /**
-     * Lists game versions installable from the configured download provider.
+     * Lists installable remote versions.
      *
-     * <p>This talks to the Mojang/BMCLAPI manifest and is therefore only
-     * meaningful for the real HMCL profile.</p>
+     * <p>With a null component this returns the game versions offered by the
+     * configured download provider.  With a component (an HMCL patch id such
+     * as {@code fabric} or {@code forge}) it returns the versions of that
+     * loader for the given game version.</p>
      */
-    default List<RemoteVersionDescriptor> listRemoteVersions() throws Exception {
+    default List<RemoteVersionDescriptor> listRemoteVersions(String component, String gameVersion) throws Exception {
         throw new UnsupportedOperationException(unavailableMessage());
     }
 

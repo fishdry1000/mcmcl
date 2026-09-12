@@ -64,8 +64,21 @@ public final class HmclHelperClient implements AutoCloseable {
     }
 
     public CompletableFuture<List<RemoteVersion>> remoteVersions() throws IOException {
+        return remoteVersions(null, null);
+    }
+
+    /**
+     * Fetches remote versions; with a non-blank {@code component} this returns the loader versions
+     * offered for that component on top of {@code gameVersion}.
+     */
+    public CompletableFuture<List<RemoteVersion>> remoteVersions(String component, String gameVersion)
+            throws IOException {
         JsonObject request = new JsonObject();
         request.addProperty("command", "remoteVersions");
+        if (component != null && !component.isBlank()) {
+            request.addProperty("component", component);
+            request.addProperty("gameVersion", gameVersion);
+        }
         return send(request).thenApply(this::parseRemoteVersions);
     }
 
@@ -138,12 +151,24 @@ public final class HmclHelperClient implements AutoCloseable {
     /** Starts installing {@code gameVersion} into a new instance and reports progress through {@code logSink}. */
     public InstallHandle install(String instanceId, String gameVersion, Consumer<String> logSink)
             throws IOException {
-        return startInstall("install", instanceId, gameVersion, logSink);
+        return install(instanceId, gameVersion, List.of(), logSink);
+    }
+
+    /**
+     * Starts installing {@code gameVersion} into a new instance with the given mod loaders layered
+     * on top and reports progress through {@code logSink}.
+     */
+    public InstallHandle install(
+            String instanceId,
+            String gameVersion,
+            List<LoaderSpec> loaders,
+            Consumer<String> logSink) throws IOException {
+        return startInstall("install", instanceId, gameVersion, loaders, logSink);
     }
 
     /** Starts repairing an existing instance; accepted and terminal events mirror {@link #install}. */
     public InstallHandle repair(String instanceId, Consumer<String> logSink) throws IOException {
-        return startInstall("repair", instanceId, null, logSink);
+        return startInstall("repair", instanceId, null, List.of(), logSink);
     }
 
     public boolean isInstalling(String instanceId) {
@@ -151,13 +176,26 @@ public final class HmclHelperClient implements AutoCloseable {
         return install != null && !install.completion().isDone();
     }
 
-    private InstallHandle startInstall(String command, String instanceId, String gameVersion, Consumer<String> logSink)
-            throws IOException {
+    private InstallHandle startInstall(
+            String command,
+            String instanceId,
+            String gameVersion,
+            List<LoaderSpec> loaders,
+            Consumer<String> logSink) throws IOException {
         if (instanceId == null || instanceId.isBlank()) {
             throw new IllegalArgumentException("instanceId must not be blank");
         }
         if ("install".equals(command) && (gameVersion == null || gameVersion.isBlank())) {
             throw new IllegalArgumentException("gameVersion must not be blank");
+        }
+        List<LoaderSpec> specs = loaders == null ? List.of() : loaders;
+        for (LoaderSpec spec : specs) {
+            if (spec.type() == null || spec.type().isBlank()) {
+                throw new IllegalArgumentException("Loader type must not be blank");
+            }
+            if (spec.version() == null || spec.version().isBlank()) {
+                throw new IllegalArgumentException("Loader version must not be blank");
+            }
         }
 
         InstallHandle handle = new InstallHandle(instanceId, new CompletableFuture<>());
@@ -171,6 +209,16 @@ public final class HmclHelperClient implements AutoCloseable {
         request.addProperty("instanceId", instanceId);
         if (gameVersion != null) {
             request.addProperty("gameVersion", gameVersion);
+        }
+        if (!specs.isEmpty()) {
+            JsonArray loaderArray = new JsonArray();
+            for (LoaderSpec spec : specs) {
+                JsonObject loader = new JsonObject();
+                loader.addProperty("type", spec.type());
+                loader.addProperty("version", spec.version());
+                loaderArray.add(loader);
+            }
+            request.add("loaders", loaderArray);
         }
 
         try {
@@ -707,6 +755,10 @@ public final class HmclHelperClient implements AutoCloseable {
     }
 
     public record RemoteVersion(String id, String type, String releaseTime) {
+    }
+
+    /** Describes one mod loader to install on top of the requested game version. */
+    public record LoaderSpec(String type, String version) {
     }
 
     public record HelperInfo(

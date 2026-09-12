@@ -2,6 +2,8 @@ package top.fish1000.mcmcl.helper.hmcl;
 
 import org.jackhuang.hmcl.auth.AuthInfo;
 import org.jackhuang.hmcl.download.BMCLAPIDownloadProvider;
+import org.jackhuang.hmcl.download.ComponentRemoteVersion;
+import org.jackhuang.hmcl.download.ComponentVersionList;
 import org.jackhuang.hmcl.download.DefaultCacheRepository;
 import org.jackhuang.hmcl.download.DefaultDependencyManager;
 import org.jackhuang.hmcl.download.DownloadProvider;
@@ -125,21 +127,60 @@ public final class RealHmclCoreAdapter implements HmclCoreAdapter {
     }
 
     @Override
-    public List<RemoteVersionDescriptor> listRemoteVersions() throws Exception {
-        GameVersionList list = new GameVersionList(createDownloadProvider());
-        list.refreshAsync().run();
+    public List<RemoteVersionDescriptor> listRemoteVersions(String component, String gameVersion) throws Exception {
+        DownloadProvider provider = createDownloadProvider();
+        if (component == null || component.isBlank()) {
+            GameVersionList list = new GameVersionList(provider);
+            awaitTask(list.refreshAsync());
+            List<RemoteVersionDescriptor> result = new ArrayList<>();
+            for (GameRemoteVersion version : list.getVersions(null)) {
+                ReleaseType type = version.getType();
+                result.add(new RemoteVersionDescriptor(
+                        version.getGameVersion(),
+                        type == null ? "unknown" : type.name().toLowerCase(Locale.ROOT),
+                        version.getReleaseDate() == null ? "" : version.getReleaseDate().toString()));
+            }
+            result.sort(Comparator
+                    .comparing(RemoteVersionDescriptor::releaseTime, Comparator.nullsLast(Comparator.naturalOrder()))
+                    .reversed());
+            return result;
+        }
+
+        GameComponentType type = GameComponentType.fromPatchId(component);
+        if (type == null) {
+            throw new IllegalArgumentException("unknown component: " + component);
+        }
+        ComponentVersionList<?> list = provider.getVersionList(type);
+        awaitTask(list.refreshAsync());
         List<RemoteVersionDescriptor> result = new ArrayList<>();
-        for (GameRemoteVersion version : list.getVersions(null)) {
-            ReleaseType type = version.getType();
+        for (ComponentRemoteVersion version : list.getVersions(gameVersion)) {
             result.add(new RemoteVersionDescriptor(
-                    version.getGameVersion(),
-                    type == null ? "unknown" : type.name().toLowerCase(Locale.ROOT),
+                    version.getSelfVersion(),
+                    type.getPatchId(),
                     version.getReleaseDate() == null ? "" : version.getReleaseDate().toString()));
         }
-        result.sort(Comparator
-                .comparing(RemoteVersionDescriptor::releaseTime, Comparator.nullsLast(Comparator.naturalOrder()))
-                .reversed());
         return result;
+    }
+
+    private static void awaitTask(Task<?> task) throws Exception {
+        CountDownLatch done = new CountDownLatch(1);
+        AtomicBoolean success = new AtomicBoolean();
+        TaskExecutor executor = task.executor(new TaskListener() {
+            @Override
+            public void onStop(boolean taskSuccess, TaskExecutor finishedExecutor) {
+                success.set(taskSuccess);
+                done.countDown();
+            }
+        });
+        executor.start();
+        done.await();
+        if (!success.get()) {
+            Exception failure = executor.getException();
+            if (executor.isCancelled() || failure == null) {
+                throw new IOException("HMCL task failed without an exception");
+            }
+            throw failure;
+        }
     }
 
     @Override
@@ -181,6 +222,14 @@ public final class RealHmclCoreAdapter implements HmclCoreAdapter {
                 GameBuilder builder = dependencyManager.newGameBuilder(id);
                 try {
                     builder.component(GameComponentType.GAME, request.gameVersion());
+                    for (HmclInstallRequest.ComponentSpec loader : request.loaders()) {
+                        GameComponentType type = GameComponentType.fromPatchId(loader.type());
+                        if (type == null) {
+                            throw new IllegalArgumentException("unknown loader component: " + loader.type());
+                        }
+                        events.log("adding loader " + loader.type() + " " + loader.version());
+                        builder.component(type, loader.version());
+                    }
                     task = builder.buildAsync();
                 } finally {
                     // No-op once buildAsync has transferred the draft, but it

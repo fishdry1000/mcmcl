@@ -3,7 +3,9 @@ package top.fish1000.mcmcl;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
@@ -14,6 +16,8 @@ import net.minecraft.network.chat.Component;
 public final class InstallScreen extends Screen {
     private static final int PANEL_WIDTH = 560;
     private static final int ROW_HEIGHT = 32;
+    /** Loader ids offered by the cycle button, in cycle order; {@code null} means plain vanilla. */
+    private static final String[] LOADER_CYCLE = {null, "fabric", "forge", "neoforge", "quilt", "optifine"};
 
     private final Screen parent;
     private List<HmclHelperClient.RemoteVersion> versions = List.of();
@@ -23,6 +27,9 @@ public final class InstallScreen extends Screen {
     private boolean statusError;
     private String latestLog = "";
     private boolean initialFetchStarted;
+    private String selectedLoader;
+    private String loaderGameVersion;
+    private Button loaderButton;
 
     public InstallScreen(Screen parent) {
         super(Component.translatable("screen.minecraftminecraftlauncher.install.title"));
@@ -54,16 +61,39 @@ public final class InstallScreen extends Screen {
             addRenderableWidget(button);
         }
 
-        ButtonRowLayout.Geometry bottomRow = ButtonRowLayout.centered(left, panelWidth, 8, 100, 100);
+        boolean loaderMode = inLoaderMode();
+        ButtonRowLayout.Geometry bottomRow = loaderMode
+                ? ButtonRowLayout.centered(left, panelWidth, 8, 100, 100, 100, 100)
+                : ButtonRowLayout.centered(left, panelWidth, 8, 100, 100, 100);
+        int slot = 0;
+        if (loaderMode) {
+            addRenderableWidget(Button.builder(
+                            Component.translatable("screen.minecraftminecraftlauncher.install.back"),
+                            ignored -> leaveLoaderMode())
+                    .bounds(bottomRow.x()[slot], height - 32, bottomRow.width()[slot], 20)
+                    .build());
+            slot++;
+        }
         addRenderableWidget(Button.builder(
                         Component.translatable("screen.minecraftminecraftlauncher.install.refresh"),
-                        ignored -> refreshVersions())
-                .bounds(bottomRow.x()[0], height - 32, bottomRow.width()[0], 20)
+                        ignored -> refreshCurrentVersions())
+                .bounds(bottomRow.x()[slot], height - 32, bottomRow.width()[slot], 20)
                 .build());
+        slot++;
+        loaderButton = Button.builder(
+                        Component.translatable(
+                                "screen.minecraftminecraftlauncher.install.loader_prefix",
+                                loaderLabel(selectedLoader)
+                        ),
+                        ignored -> cycleLoader())
+                .bounds(bottomRow.x()[slot], height - 32, bottomRow.width()[slot], 20)
+                .build();
+        addRenderableWidget(loaderButton);
+        slot++;
         addRenderableWidget(Button.builder(
                         Component.translatable("gui.done"),
                         ignored -> onClose())
-                .bounds(bottomRow.x()[1], height - 32, bottomRow.width()[1], 20)
+                .bounds(bottomRow.x()[slot], height - 32, bottomRow.width()[slot], 20)
                 .build());
         updateRowButtons();
     }
@@ -97,7 +127,25 @@ public final class InstallScreen extends Screen {
         int visibleRows = Math.max(1, (bottom - rowTop) / ROW_HEIGHT);
 
         graphics.centeredText(font, title, width / 2, 20, 0xFFFFFFFF);
-        graphics.centeredText(font, status, width / 2, 40, statusError ? 0xFFFF7777 : 0xFFB8E0FF);
+        if (inLoaderMode()) {
+            graphics.centeredText(
+                    font,
+                    Component.translatable(
+                            "screen.minecraftminecraftlauncher.install.loader_for",
+                            loaderGameVersion
+                    ),
+                    width / 2,
+                    32,
+                    0xFFFFFFFF
+            );
+        }
+        graphics.centeredText(
+                font,
+                status,
+                width / 2,
+                inLoaderMode() ? 44 : 40,
+                statusError ? 0xFFFF7777 : 0xFFB8E0FF
+        );
         graphics.fill(left - 8, 58, right + 8, Math.max(64, bottom - 4), 0x66000000);
 
         if (versions.isEmpty()) {
@@ -129,6 +177,18 @@ public final class InstallScreen extends Screen {
         minecraft.setScreenAndShow(parent);
     }
 
+    private boolean inLoaderMode() {
+        return loaderGameVersion != null;
+    }
+
+    private void refreshCurrentVersions() {
+        if (inLoaderMode()) {
+            fetchLoaderVersions();
+        } else {
+            refreshVersions();
+        }
+    }
+
     private void refreshVersions() {
         HmclHelperClient helper = InstanceManager.helper(minecraft);
         HmclHelperClient.HelperInfo info = helper.helperInfo();
@@ -148,6 +208,9 @@ public final class InstallScreen extends Screen {
                         .remoteVersions()
                         .get(35, TimeUnit.SECONDS);
                 minecraft.execute(() -> {
+                    if (inLoaderMode()) {
+                        return; // The game-version list is no longer shown.
+                    }
                     HmclHelperClient.HelperInfo knownInfo = helper.helperInfo();
                     if (knownInfo != null && !knownInfo.launchAvailable()) {
                         versions = List.of();
@@ -163,6 +226,9 @@ public final class InstallScreen extends Screen {
                 });
             } catch (Exception exception) {
                 minecraft.execute(() -> {
+                    if (inLoaderMode()) {
+                        return; // The game-version list is no longer shown.
+                    }
                     HmclHelperClient.HelperInfo knownInfo = helper.helperInfo();
                     if (knownInfo != null && !knownInfo.launchAvailable()) {
                         status = Component.translatable("screen.minecraftminecraftlauncher.install.unavailable");
@@ -178,26 +244,132 @@ public final class InstallScreen extends Screen {
         });
     }
 
+    private void fetchLoaderVersions() {
+        HmclHelperClient helper = InstanceManager.helper(minecraft);
+        HmclHelperClient.HelperInfo info = helper.helperInfo();
+        if (info != null && !info.launchAvailable()) {
+            versions = List.of();
+            status = Component.translatable("screen.minecraftminecraftlauncher.install.unavailable");
+            statusError = true;
+            rebuildWidgets();
+            return;
+        }
+
+        status = Component.translatable("screen.minecraftminecraftlauncher.install.loading_loader");
+        statusError = false;
+        String loader = selectedLoader;
+        String gameVersion = loaderGameVersion;
+        Thread.ofVirtual().name("mcmcl-hmcl-loader-versions").start(() -> {
+            try {
+                List<HmclHelperClient.RemoteVersion> fetched = helper
+                        .remoteVersions(loader, gameVersion)
+                        .get(35, TimeUnit.SECONDS);
+                minecraft.execute(() -> {
+                    if (!isCurrentLoaderFetch(loader, gameVersion)) {
+                        return; // The user moved to another loader or left loader mode.
+                    }
+                    HmclHelperClient.HelperInfo knownInfo = helper.helperInfo();
+                    if (knownInfo != null && !knownInfo.launchAvailable()) {
+                        versions = List.of();
+                        status = Component.translatable("screen.minecraftminecraftlauncher.install.unavailable");
+                        statusError = true;
+                    } else {
+                        versions = fetched;
+                        status = Component.translatable(
+                                "screen.minecraftminecraftlauncher.install.found", versions.size());
+                        statusError = false;
+                    }
+                    rebuildWidgets();
+                });
+            } catch (Exception exception) {
+                minecraft.execute(() -> {
+                    if (!isCurrentLoaderFetch(loader, gameVersion)) {
+                        return; // The user moved to another loader or left loader mode.
+                    }
+                    HmclHelperClient.HelperInfo knownInfo = helper.helperInfo();
+                    if (knownInfo != null && !knownInfo.launchAvailable()) {
+                        status = Component.translatable("screen.minecraftminecraftlauncher.install.unavailable");
+                    } else {
+                        status = Component.translatable("screen.minecraftminecraftlauncher.install.failed");
+                    }
+                    versions = List.of();
+                    statusError = true;
+                    rebuildWidgets();
+                });
+                MinecraftMinecraftLauncher.LOGGER.warn("Could not fetch loader versions", exception);
+            }
+        });
+    }
+
+    private boolean isCurrentLoaderFetch(String loader, String gameVersion) {
+        return inLoaderMode()
+                && Objects.equals(loader, selectedLoader)
+                && Objects.equals(gameVersion, loaderGameVersion);
+    }
+
+    private void enterLoaderMode(HmclHelperClient.RemoteVersion version) {
+        loaderGameVersion = version.id();
+        versions = List.of();
+        scrollOffset = 0;
+        fetchLoaderVersions();
+    }
+
+    private void leaveLoaderMode() {
+        loaderGameVersion = null;
+        versions = List.of();
+        scrollOffset = 0;
+        refreshVersions();
+    }
+
+    private void cycleLoader() {
+        int next = 0;
+        for (int index = 0; index < LOADER_CYCLE.length; index++) {
+            if (Objects.equals(LOADER_CYCLE[index], selectedLoader)) {
+                next = (index + 1) % LOADER_CYCLE.length;
+                break;
+            }
+        }
+        selectedLoader = LOADER_CYCLE[next];
+        if (inLoaderMode()) {
+            if (selectedLoader == null) {
+                leaveLoaderMode();
+            } else {
+                versions = List.of();
+                scrollOffset = 0;
+                fetchLoaderVersions();
+            }
+        }
+    }
+
     private void toggle(HmclHelperClient.RemoteVersion version) {
         HmclHelperClient helper = InstanceManager.helper(minecraft);
-        if (helper.isInstalling(version.id())) {
-            helper.stop(version.id());
+        String instanceId = rowInstanceId(version);
+        if (helper.isInstalling(instanceId)) {
+            helper.stop(instanceId);
             status = Component.translatable("screen.minecraftminecraftlauncher.install.stopping", version.id());
             statusError = false;
+            return;
+        }
+
+        if (!inLoaderMode() && selectedLoader != null) {
+            enterLoaderMode(version);
             return;
         }
 
         latestLog = "";
         status = Component.translatable("screen.minecraftminecraftlauncher.install.install_started", version.id());
         statusError = false;
+        Consumer<String> logSink = line -> minecraft.execute(() -> {
+            latestLog = line;
+        });
         try {
-            HmclHelperClient.InstallHandle handle = helper.install(
-                    version.id(),
-                    version.id(),
-                    line -> minecraft.execute(() -> {
-                        latestLog = line;
-                    })
-            );
+            HmclHelperClient.InstallHandle handle = inLoaderMode()
+                    ? helper.install(
+                            loaderInstanceId(),
+                            loaderGameVersion,
+                            List.of(new HmclHelperClient.LoaderSpec(selectedLoader, version.id())),
+                            logSink)
+                    : helper.install(version.id(), version.id(), logSink);
             handle.completion().whenComplete((exitCode, error) -> minecraft.execute(() -> {
                 if (error != null) {
                     status = Component.translatable(
@@ -222,15 +394,24 @@ public final class InstallScreen extends Screen {
                     "screen.minecraftminecraftlauncher.install.install_failed", version.id());
             statusError = true;
             latestLog = LauncherScreen.failureMessage(exception);
-            MinecraftMinecraftLauncher.LOGGER.warn("Could not install MCMCL instance {}", version.id(), exception);
+            MinecraftMinecraftLauncher.LOGGER.warn("Could not install MCMCL instance {}", instanceId, exception);
         }
+    }
+
+    private String rowInstanceId(HmclHelperClient.RemoteVersion version) {
+        return inLoaderMode() ? loaderInstanceId() : version.id();
+    }
+
+    /** Loader installs live in a dedicated instance named after the game version and loader. */
+    private String loaderInstanceId() {
+        return loaderGameVersion + "-" + selectedLoader;
     }
 
     private void updateRowButtons() {
         HmclHelperClient helper = InstanceManager.helper(minecraft);
         HmclHelperClient.HelperInfo info = helper.helperInfo();
         for (RowWidgets row : rowWidgets) {
-            boolean installing = helper.isInstalling(row.version().id());
+            boolean installing = helper.isInstalling(rowInstanceId(row.version()));
             row.button().setMessage(Component.translatable(
                     installing
                             ? "screen.minecraftminecraftlauncher.install.cancel"
@@ -238,6 +419,18 @@ public final class InstallScreen extends Screen {
             ));
             row.button().active = info != null && info.launchAvailable();
         }
+        loaderButton.setMessage(Component.translatable(
+                "screen.minecraftminecraftlauncher.install.loader_prefix",
+                loaderLabel(selectedLoader)
+        ));
+    }
+
+    private static Component loaderLabel(String loader) {
+        if (loader == null) {
+            return Component.translatable("screen.minecraftminecraftlauncher.install.loader.none");
+        }
+        return Component.translatableWithFallback(
+                "screen.minecraftminecraftlauncher.install.loader." + loader, loader);
     }
 
     private static Component versionType(HmclHelperClient.RemoteVersion version) {

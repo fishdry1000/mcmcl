@@ -176,22 +176,86 @@ public final class ProtocolTest {
         InstallRecordingAdapter installer = new InstallRecordingAdapter(true, null, null);
         messages = run(installer,
                 "{\"id\":\"rv-1\",\"command\":\"remoteVersions\"}\n"
+                + "{\"id\":\"rv-2\",\"command\":\"remoteVersions\",\"component\":\"fabric\",\"gameVersion\":\"1.0\"}\n"
+                + "{\"id\":\"bad-rv\",\"command\":\"remoteVersions\",\"component\":\"fabric\"}\n"
                 + "{\"id\":\"bad-install\",\"command\":\"install\",\"instanceId\":\"demo\"}\n"
                 + "{\"id\":\"install-1\",\"command\":\"install\",\"instanceId\":\"demo\",\"gameVersion\":\"1.0\"}\n"
+                + "{\"id\":\"bad-loaders\",\"command\":\"install\",\"instanceId\":\"x\","
+                + "\"gameVersion\":\"1.0\",\"loaders\":[{\"type\":\"fabric\"}]}\n"
+                + "{\"id\":\"bad-loaders-2\",\"command\":\"install\",\"instanceId\":\"x\","
+                + "\"gameVersion\":\"1.0\",\"loaders\":\"nope\"}\n"
                 + "{\"id\":\"repair-1\",\"command\":\"repair\",\"instanceId\":\"other\"}\n"
                 + "{\"id\":\"stop-missing\",\"command\":\"stop\",\"instanceId\":\"none\"}\n");
         Map<String, Object> remoteVersions = findResponse(messages, "rv-1");
         check(remoteVersions != null, "remoteVersions response missing");
         check(remoteVersions.get("versions") instanceof List<?> versions && versions.size() == 1,
                 "remoteVersions should carry the adapter version list");
+        check("fabric".equals(installer.lastComponent) && "1.0".equals(installer.lastGameVersion),
+                "component version list request should reach the adapter with its arguments");
+        check(hasResponseWithCode(messages, "bad-rv", "INVALID_REQUEST"),
+                "component list without gameVersion should be rejected");
         check(hasResponseWithCode(messages, "bad-install", "INVALID_REQUEST"),
                 "install without gameVersion should be rejected");
         check(hasResponse(messages, "install-1", true), "install should be accepted");
-        check(hasEvent(messages, "demo", "log"), "install progress event missing");
-        check(hasEventWithCode(messages, "demo", "exit", 0), "install exit event missing");
+        check(hasResponseWithCode(messages, "bad-loaders", "INVALID_REQUEST"),
+                "loader without version should be rejected");
+        check(hasResponseWithCode(messages, "bad-loaders-2", "INVALID_REQUEST"),
+                "non-array loaders should be rejected");
         check(hasResponse(messages, "repair-1", true), "repair should be accepted");
         check(hasResponseWithCode(messages, "stop-missing", "NOT_RUNNING"),
                 "stop for an idle instance should report NOT_RUNNING");
+
+        // Install execution is asynchronous; drive it through an interactive
+        // session so the tasks are guaranteed to reach the adapter.
+        CountDownLatch installsEntered = new CountDownLatch(2);
+        InstallRecordingAdapter installer2 = new InstallRecordingAdapter(true, installsEntered, null);
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        try (PrintStream stream = new PrintStream(bytes, true, StandardCharsets.UTF_8);
+             PipedWriter inputWriter = new PipedWriter()) {
+            PipedReader inputReader = new PipedReader(inputWriter);
+            HelperServer server = new HelperServer(installer2, new JsonLineWriter(stream));
+            AtomicReference<Throwable> failure = new AtomicReference<>();
+            Thread serverThread = new Thread(() -> {
+                try {
+                    server.run(new BufferedReader(inputReader));
+                } catch (Throwable throwable) {
+                    failure.set(throwable);
+                }
+            }, "mcmcl-helper-install-test");
+            serverThread.start();
+
+            inputWriter.write("{\"id\":\"install-1\",\"command\":\"install\","
+                    + "\"instanceId\":\"demo\",\"gameVersion\":\"1.0\"}\n");
+            inputWriter.write("{\"id\":\"install-loaders\",\"command\":\"install\","
+                    + "\"instanceId\":\"loader-demo\",\"gameVersion\":\"1.0\","
+                    + "\"loaders\":[{\"type\":\"fabric\",\"version\":\"0.16.9\"}]}\n");
+            inputWriter.flush();
+            check(installsEntered.await(5, TimeUnit.SECONDS), "installs did not reach the adapter in time");
+
+            inputWriter.write("{\"id\":\"shutdown-1\",\"command\":\"shutdown\"}\n");
+            inputWriter.flush();
+            inputWriter.close();
+            serverThread.join(10000);
+            check(!serverThread.isAlive(), "test helper server did not terminate");
+            if (failure.get() != null) {
+                throw new AssertionError("test helper server failed", failure.get());
+            }
+        }
+
+        messages = new ArrayList<>();
+        for (String line : bytes.toString(StandardCharsets.UTF_8).split("\\R")) {
+            if (!line.isBlank()) {
+                messages.add(cast(Json.parse(line)));
+            }
+        }
+        check(hasEvent(messages, "demo", "log"), "install progress event missing");
+        check(hasEventWithCode(messages, "demo", "exit", 0), "install exit event missing");
+        check(hasResponse(messages, "install-loaders", true), "install with loaders should be accepted");
+        check(installer2.lastInstallRequest != null
+                        && installer2.lastInstallRequest.loaders().size() == 1
+                        && "fabric".equals(installer2.lastInstallRequest.loaders().get(0).type())
+                        && "0.16.9".equals(installer2.lastInstallRequest.loaders().get(0).version()),
+                "loader components should reach the adapter");
     }
 
     private static void serverCancelsRunningInstall() throws Exception {
@@ -422,14 +486,21 @@ public final class ProtocolTest {
                         mirror);
 
                 List<Map<String, Object>> remote = new ArrayList<>();
-                for (var version : adapter.listRemoteVersions()) {
+                for (var version : adapter.listRemoteVersions(null, null)) {
                     remote.add(version.toJson());
                 }
                 check(remote.stream().anyMatch(version -> "fixture".equals(version.get("id"))),
                         "remote version list should contain the fixture version");
 
+                List<Map<String, Object>> fabricVersions = new ArrayList<>();
+                for (var version : adapter.listRemoteVersions("fabric", "fixture-vanilla")) {
+                    fabricVersions.add(version.toJson());
+                }
+                check(fabricVersions.stream().anyMatch(version -> "0.16.9".equals(version.get("id"))),
+                        "fabric version list should contain the fixture loader version: " + fabricVersions);
+
                 RecordingSink installSink = new RecordingSink();
-                adapter.install(new HmclInstallRequest("fixture", "fixture"), installSink);
+                adapter.install(new HmclInstallRequest("fixture", "fixture", List.of()), installSink);
                 check(installSink.exit.get(120, TimeUnit.SECONDS) == 0,
                         "fixture install did not finish successfully: "
                                 + installSink.error.get() + " logs: " + installSink.logs);
@@ -442,10 +513,35 @@ public final class ProtocolTest {
 
                 Files.delete(installedJar);
                 RecordingSink repairSink = new RecordingSink();
-                adapter.install(new HmclInstallRequest("fixture", null), repairSink);
+                adapter.install(new HmclInstallRequest("fixture", null, List.of()), repairSink);
                 check(repairSink.exit.get(120, TimeUnit.SECONDS) == 0,
                         "fixture repair did not finish: " + repairSink.error.get());
                 check(Files.isRegularFile(installedJar), "repair did not restore the client jar");
+
+                // Installing a Fabric loader instance from the fake fabric-meta
+                // endpoints, then launching it, exercises the loader chain.
+                RecordingSink fabricSink = new RecordingSink();
+                adapter.install(new HmclInstallRequest("fabric-demo", "fixture-vanilla",
+                                List.of(new HmclInstallRequest.ComponentSpec("fabric", "0.16.9"))),
+                        fabricSink);
+                check(fabricSink.exit.get(120, TimeUnit.SECONDS) == 0,
+                        "fabric install did not finish: " + fabricSink.error.get() + " logs: " + fabricSink.logs);
+                Path fabricManifest = repository.resolve("versions/fabric-demo/fabric-demo.json");
+                check(Files.isRegularFile(fabricManifest), "fabric instance manifest is missing");
+                String manifestText = Files.readString(fabricManifest);
+                check(manifestText.contains("fabric") && manifestText.contains("0.16.9"),
+                        "fabric manifest should record the loader component");
+
+                RecordingSink fabricLaunchSink = new RecordingSink();
+                HmclLaunchRequest fabricLaunch = new HmclLaunchRequest(
+                        "fabric-demo", "Player", UUID.randomUUID(), "token", "msa", null, null, null, null);
+                adapter.launch(fabricLaunch, fabricLaunchSink);
+                check(fabricLaunchSink.started.get(), "fabric instance did not report started");
+                check(fabricLaunchSink.exit.get(30, TimeUnit.SECONDS) == 0,
+                        "fabric instance did not exit successfully: " + fabricLaunchSink.error.get());
+                check(fabricLaunchSink.logs.stream().anyMatch(line -> line.contains("fixture-stdout")),
+                        "fabric instance stdout was not bridged: " + fabricLaunchSink.logs);
+                adapter.shutdown();
 
                 RecordingSink launchSink = new RecordingSink();
                 HmclLaunchRequest request = new HmclLaunchRequest(
@@ -475,17 +571,29 @@ public final class ProtocolTest {
             String path = exchange.getRequestURI().getPath();
             byte[] body;
             if (path.endsWith("/mc/game/version_manifest.json")) {
-                body = ("{\"latest\":{\"release\":\"fixture\"},\"versions\":[{"
-                        + "\"id\":\"fixture\",\"type\":\"release\","
-                        + "\"url\":\"http://127.0.0.1:" + port + "/versions/fixture/fixture.json\","
-                        + "\"time\":\"2026-01-01T00:00:00+00:00\","
-                        + "\"releaseTime\":\"2026-01-01T00:00:00+00:00\"}]}")
+                body = ("{\"latest\":{\"release\":\"fixture\"},\"versions\":["
+                        + fixtureManifestEntry(port, "fixture")
+                        + ","
+                        + fixtureManifestEntry(port, "fixture-vanilla")
+                        + "]}")
                         .getBytes(StandardCharsets.UTF_8);
             } else if (path.endsWith("/versions/fixture/fixture.json")) {
-                body = fixtureVersionJson(port, clientJar, assetIndex);
+                body = fixtureVersionJson(port, clientJar, assetIndex, "top.fish1000.mcmcl.helper.LaunchFixtureMain");
+            } else if (path.endsWith("/versions/fixture-vanilla/fixture-vanilla.json")) {
+                body = fixtureVersionJson(port, clientJar, assetIndex, "net.minecraft.client.main.Main");
             } else if (path.endsWith("/assets/indexes/fixture.json")) {
                 body = assetIndex;
             } else if (path.endsWith("/client.jar")) {
+                body = clientJar;
+            } else if (path.endsWith("/fabric-meta/v2/versions/game")) {
+                body = "[{\"version\":\"fixture-vanilla\",\"maven\":\"https://maven.fabricmc.net\",\"stable\":true}]"
+                        .getBytes(StandardCharsets.UTF_8);
+            } else if (path.endsWith("/fabric-meta/v2/versions/loader")) {
+                body = "[{\"version\":\"0.16.9\",\"maven\":\"https://maven.fabricmc.net\",\"stable\":true}]"
+                        .getBytes(StandardCharsets.UTF_8);
+            } else if (path.endsWith("/fabric-meta/v2/versions/loader/fixture-vanilla/0.16.9")) {
+                body = fabricLaunchMeta();
+            } else if (path.contains("/maven/net/fabricmc/")) {
                 body = clientJar;
             } else {
                 exchange.sendResponseHeaders(404, -1);
@@ -501,13 +609,33 @@ public final class ProtocolTest {
         return server;
     }
 
-    private static byte[] fixtureVersionJson(int port, byte[] clientJar, byte[] assetIndex) {
+    private static String fixtureManifestEntry(int port, String id) {
+        return "{\"id\":\"" + id + "\",\"type\":\"release\","
+                + "\"url\":\"http://127.0.0.1:" + port + "/versions/" + id + "/" + id + ".json\","
+                + "\"time\":\"2026-01-01T00:00:00+00:00\","
+                + "\"releaseTime\":\"2026-01-01T00:00:00+00:00\"}";
+    }
+
+    private static byte[] fabricLaunchMeta() {
+        return ("{"
+                + "\"loader\":{\"maven\":\"net.fabricmc:fabric-loader:0.16.9\",\"version\":\"0.16.9\","
+                + "\"stable\":true,\"separator\":\".\",\"build\":1},"
+                + "\"intermediary\":{\"maven\":\"net.fabricmc:intermediary:fixture-vanilla\","
+                + "\"version\":\"fixture-vanilla\",\"stable\":true},"
+                + "\"launcherMeta\":{"
+                + "\"mainClass\":\"top.fish1000.mcmcl.helper.LaunchFixtureMain\","
+                + "\"libraries\":{\"common\":[],\"server\":[]}"
+                + "}}")
+                .getBytes(StandardCharsets.UTF_8);
+    }
+
+    private static byte[] fixtureVersionJson(int port, byte[] clientJar, byte[] assetIndex, String mainClass) {
         return ("{"
                 + "\"id\":\"fixture\","
                 + "\"type\":\"release\","
                 + "\"time\":\"2026-01-01T00:00:00+00:00\","
                 + "\"releaseTime\":\"2026-01-01T00:00:00+00:00\","
-                + "\"mainClass\":\"top.fish1000.mcmcl.helper.LaunchFixtureMain\","
+                + "\"mainClass\":\"" + mainClass + "\","
                 + "\"assets\":\"fixture\","
                 + "\"assetIndex\":{\"id\":\"fixture\","
                 + "\"url\":\"http://127.0.0.1:" + port + "/assets/indexes/fixture.json\","
@@ -607,6 +735,7 @@ public final class ProtocolTest {
         private final boolean installAvailable;
         private final CountDownLatch enteredLatch;
         private final CountDownLatch releaseLatch;
+        private volatile HmclInstallRequest lastInstallRequest;
 
         private InstallRecordingAdapter(
                 boolean installAvailable,
@@ -623,12 +752,8 @@ public final class ProtocolTest {
         }
 
         @Override
-        public List<RemoteVersionDescriptor> listRemoteVersions() {
-            return List.of(new RemoteVersionDescriptor("1.0", "release", "2026-01-01T00:00:00Z"));
-        }
-
-        @Override
         public HmclInstallHandle install(HmclInstallRequest request, HmclLaunchEventSink events) throws Exception {
+            lastInstallRequest = request;
             if (enteredLatch != null) {
                 enteredLatch.countDown();
             }
@@ -704,6 +829,8 @@ public final class ProtocolTest {
         private volatile boolean stopped;
         private volatile HmclLaunchEventSink events;
         private volatile HmclLaunchRequest lastRequest;
+        volatile String lastComponent;
+        volatile String lastGameVersion;
         private final AtomicBoolean exited = new AtomicBoolean();
         private final CountDownLatch startedLatch = new CountDownLatch(1);
         private final CountDownLatch stoppedLatch = new CountDownLatch(1);
@@ -712,6 +839,13 @@ public final class ProtocolTest {
         public List<InstanceDescriptor> listInstances() {
             return List.of(new InstanceDescriptor("test-instance", "Test", "1.0", Path.of("test-instance"),
                     Path.of("test-instance/test-instance.json")));
+        }
+
+        @Override
+        public List<RemoteVersionDescriptor> listRemoteVersions(String component, String gameVersion) {
+            lastComponent = component;
+            lastGameVersion = gameVersion;
+            return List.of(new RemoteVersionDescriptor("1.0", "release", "2026-01-01T00:00:00Z"));
         }
 
         @Override
