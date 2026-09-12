@@ -134,6 +134,36 @@ dependencies {
     // http://www.gradle.org/docs/current/userguide/dependency_management.html
 }
 
+// Bundle the standalone HMCL helper (profile build) into the mod JAR so the
+// in-game launcher works out of the box: at runtime the mod extracts it to
+// the configured helper location when it is missing (see HelperBundle).
+// Build the helper first:  gradlew.bat -p helper "-PhmclCheckout=<checkout>" jar
+def helperProfileLibs = file('helper/build-hmcl/libs')
+def helperJarCandidates = helperProfileLibs.listFiles()
+        ?.findAll { it.isFile() && (it.name ==~ /mcmcl-hmcl-helper-.*\.jar/) }
+        ?.sort { it.lastModified() }
+def bundledHelperJar = helperJarCandidates ? helperJarCandidates.last() : null
+if (bundledHelperJar == null) {
+    def message = ('No HMCL profile helper jar found in helper/build-hmcl/libs; the mod will not embed a helper. ' +
+            'Build it with:  gradlew.bat -p helper "-PhmclCheckout=<checkout>" jar  ' +
+            '(or force this build to fail with -PrequireHelperEmbed=true)')
+    if (providers.gradleProperty('requireHelperEmbed').getOrElse('false').toBoolean()) {
+        throw new GradleException(message)
+    }
+    logger.warn('WARNING: {}', message)
+}
+
+def helperEmbedDir = file("$buildDir/helperEmbed")
+def prepareBundledHelper = tasks.register('prepareBundledHelper', Copy) {
+    if (bundledHelperJar != null) {
+        from(bundledHelperJar) {
+            rename { 'hmcl-helper.jar' }
+        }
+    }
+    // Mirrors HelperBundle.RESOURCE inside the mod JAR.
+    into file("$helperEmbedDir/helper")
+}
+
 // This block of code expands all declared replace properties in the specified resource targets.
 // A missing property will result in an error. Properties are expanded using ${} Groovy notation.
 var generateModMetadata = tasks.register("generateModMetadata", ProcessResources) {
@@ -154,6 +184,11 @@ var generateModMetadata = tasks.register("generateModMetadata", ProcessResources
 // Include the output of "generateModMetadata" as an input directory for the build
 // this works with both building through Gradle and the IDE.
 sourceSets.main.resources.srcDir generateModMetadata
+// Include the bundled HMCL helper (see prepareBundledHelper above).  The
+// plain directory keeps the helper/hmcl-helper.jar layout; wiring the Copy
+// task into processResources provides the build ordering.
+sourceSets.main.resources.srcDir helperEmbedDir
+tasks.named('processResources') { dependsOn prepareBundledHelper }
 // To avoid having to run "generateModMetadata" manually, make it run on every project reload
 neoForge.ideSyncTask generateModMetadata
 

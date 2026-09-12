@@ -35,8 +35,9 @@ Minecraft 内 GUI → JSON Lines（stdin/stdout）→ mcmcl-hmcl-helper.jar → 
 ```
 
 - `installHelper` 会把 JAR 复制到 `run/mcmcl/hmcl-helper.jar`（可用 `-PhelperInstallDirectory=<目录>` 覆盖）。
+- 模组构建（`prepareBundledHelper` 任务）会把 `helper/build-hmcl/libs` 下最新的 profile JAR 打包进模组（资源 `helper/hmcl-helper.jar`），运行时由 `HelperBundle` 自动解压到配置的 helper 位置；没有 profile 产物时模组构建仅告警跳过，`-PrequireHelperEmbed=true` 可强制失败。
 - **测试不是 JUnit**：`helper` 的测试是普通 `main()` 入口套件（`ProtocolTest`），通过 `protocolTest` 任务运行；`test` 依赖该任务。
-- 根工程启用了 Gradle configuration-cache。
+- 根工程启用了 Gradle configuration-cache（注意：`build.gradle` 改动后若任务行为异常，用 `--no-configuration-cache` 排查）。
 
 ## 架构边界
 

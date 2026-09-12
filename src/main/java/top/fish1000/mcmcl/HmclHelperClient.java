@@ -344,8 +344,16 @@ public final class HmclHelperClient implements AutoCloseable {
                 helperInfo = null;
             }
 
+            // The mod bundles a helper JAR; extract it when the configured
+            // location is empty or still holds one of our older extractions.
+            try {
+                HelperBundle.ensureExtracted(helperJar);
+            } catch (IOException exception) {
+                throw new IOException("Could not extract the bundled HMCL helper to " + helperJar, exception);
+            }
             if (!Files.isRegularFile(helperJar)) {
-                throw new IOException("HMCL helper JAR does not exist: " + helperJar);
+                throw new IOException("HMCL helper JAR does not exist: " + helperJar
+                        + " (this mod build does not bundle one either)");
             }
             Files.createDirectories(repositoryDirectory);
             Files.createDirectories(workingDirectory);

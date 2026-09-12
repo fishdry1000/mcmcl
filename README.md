@@ -39,9 +39,12 @@ HMCL Core 当前没有稳定的公开 Maven 坐标。真实 HMCL Core adapter �
 ```
 
 `installHelper` 默认写入 `run/mcmcl/hmcl-helper.jar`；可用
-`-PhelperInstallDirectory=<目录>` 覆盖。正式安装时将同一个 profile JAR 放到
-当前 Minecraft 游戏目录的 `mcmcl/hmcl-helper.jar`，或者在 NeoForge 配置中修改
-`hmclHelperJar`。HMCL 游戏仓库默认目录为：
+`-PhelperInstallDirectory=<目录>` 覆盖。**模组构建会把 profile JAR 一并打包进
+模组**（取 `helper/build-hmcl/libs` 下最新的产物，嵌入 `helper/hmcl-helper.jar`
+资源）：运行时若配置的 helper 位置没有 JAR，或仍是模组解压过的旧版本，会自动
+解压/更新，开箱即用；自己手动放置的 helper（无指纹标记）不会被覆盖。发布模组
+前请先构建 helper profile JAR，CI 可用 `-PrequireHelperEmbed=true` 强制校验。
+HMCL 游戏仓库默认目录为：
 
 ```text
 <Minecraft 游戏目录>/mcmcl/hmcl/
@@ -97,7 +100,7 @@ profile JAR 是平台无关的单文件：平台相关的 JavaFX 不打包在内
 NeoForge 客户端配置项：
 
 - `instancesDirectory`：HMCL 仓库根目录，默认 `mcmcl/hmcl`；
-- `hmclHelperJar`：独立 helper JAR 路径，默认 `mcmcl/hmcl-helper.jar`；
+- `hmclHelperJar`：独立 helper JAR 路径，默认 `mcmcl/hmcl-helper.jar`；缺失时自动解压模组内置的 helper（开箱即用），模组更新时自动刷新；自己放置的 JAR 不会被覆盖；
 - `maxInstances`：界面最多显示的实例数量；
 - `offlineMode`：使用离线账号（用户名可配置）而不是当前 Minecraft 会话；
 - `offlineUsername`：离线账号用户名，留空时沿用当前会话用户名；
