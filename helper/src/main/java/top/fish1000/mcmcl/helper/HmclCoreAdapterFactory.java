@@ -19,12 +19,15 @@ public final class HmclCoreAdapterFactory {
     private HmclCoreAdapterFactory() {
     }
 
-    public static HmclCoreAdapter create(Path repository, RepositoryInstanceCatalog catalog) {
+    public static HmclCoreAdapter create(
+            Path repository,
+            RepositoryInstanceCatalog catalog,
+            String downloadProvider) {
         try {
             Class<?> type = Class.forName(PROFILE_ADAPTER, true, HmclCoreAdapterFactory.class.getClassLoader());
             Constructor<?> constructor = type.getConstructor();
             HmclCoreAdapterProvider provider = (HmclCoreAdapterProvider) constructor.newInstance();
-            return provider.create(repository);
+            return provider.create(repository, downloadProvider);
         } catch (ClassNotFoundException e) {
             return new UnavailableHmclCoreAdapter(catalog);
         } catch (ReflectiveOperationException | LinkageError e) {

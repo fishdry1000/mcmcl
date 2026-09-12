@@ -21,6 +21,8 @@ public final class LauncherScreen extends Screen {
     private List<HmclInstance> instances = List.of();
     private final List<RowWidgets> rowWidgets = new ArrayList<>();
     private final Set<String> stoppingInstances = new HashSet<>();
+    private int scrollOffset;
+    private Button installButton;
     private Component status = Component.translatable("screen.minecraftminecraftlauncher.loading");
     private boolean statusError;
     private String latestOutput = "";
@@ -44,9 +46,10 @@ public final class LauncherScreen extends Screen {
         int bottom = height - 42;
         int rowTop = 70;
         int visibleRows = Math.max(1, (bottom - rowTop) / ROW_HEIGHT);
+        scrollOffset = Math.min(scrollOffset, Math.max(0, instances.size() - visibleRows));
 
-        for (int index = 0; index < Math.min(visibleRows, instances.size()); index++) {
-            HmclInstance instance = instances.get(index);
+        for (int index = 0; index < Math.min(visibleRows, instances.size() - scrollOffset); index++) {
+            HmclInstance instance = instances.get(index + scrollOffset);
             Button button = Button.builder(Component.empty(), ignored -> toggle(instance))
                     .bounds(left + panelWidth - 108, rowTop + index * ROW_HEIGHT, 100, 20)
                     .build();
@@ -64,6 +67,12 @@ public final class LauncherScreen extends Screen {
                         ignored -> openDirectory())
                 .bounds(left + 108, height - 32, 160, 20)
                 .build());
+        installButton = Button.builder(
+                        Component.translatable("screen.minecraftminecraftlauncher.install"),
+                        ignored -> minecraft.setScreenAndShow(new InstallScreen(this)))
+                .bounds(left + 276, height - 32, 100, 20)
+                .build();
+        addRenderableWidget(installButton);
         addRenderableWidget(Button.builder(
                         Component.translatable("gui.done"),
                         ignored -> onClose())
@@ -75,6 +84,20 @@ public final class LauncherScreen extends Screen {
     @Override
     public void tick() {
         updateRowButtons();
+    }
+
+    @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+        int bottom = height - 42;
+        int rowTop = 70;
+        int visibleRows = Math.max(1, (bottom - rowTop) / ROW_HEIGHT);
+        int maxOffset = Math.max(0, instances.size() - visibleRows);
+        int newOffset = Math.max(0, Math.min(maxOffset, scrollOffset - (int) Math.signum(scrollY)));
+        if (newOffset != scrollOffset) {
+            scrollOffset = newOffset;
+            rebuildWidgets();
+        }
+        return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
     }
 
     @Override
@@ -99,8 +122,8 @@ public final class LauncherScreen extends Screen {
                     0xFFD0D0D0
             );
         } else {
-            for (int index = 0; index < Math.min(visibleRows, instances.size()); index++) {
-                HmclInstance instance = instances.get(index);
+            for (int index = 0; index < Math.min(visibleRows, instances.size() - scrollOffset); index++) {
+                HmclInstance instance = instances.get(index + scrollOffset);
                 int rowY = rowTop + index * ROW_HEIGHT;
                 graphics.fill(left, rowY - 2, right, rowY + 24, index % 2 == 0 ? 0x22000000 : 0x33000000);
                 String text = instance.name() + "  ·  " + instance.version();
@@ -177,7 +200,8 @@ public final class LauncherScreen extends Screen {
             return;
         }
 
-        latestOutput = "";
+        latestOutput = Component.translatable(
+                "screen.minecraftminecraftlauncher.account", activeAccountName()).getString();
         stoppingInstances.remove(instance.id());
         status = Component.translatable("screen.minecraftminecraftlauncher.starting", instance.name());
         statusError = false;
@@ -223,21 +247,30 @@ public final class LauncherScreen extends Screen {
         }
     }
 
+    private String activeAccountName() {
+        if (Config.OFFLINE_MODE.get()) {
+            String offlineUsername = Config.OFFLINE_USERNAME.get();
+            return offlineUsername.isBlank() ? minecraft.getUser().getName() : offlineUsername;
+        }
+        return minecraft.getUser().getName();
+    }
+
     private void updateRowButtons() {
+        HmclHelperClient helper = InstanceManager.helper(minecraft);
+        HmclHelperClient.HelperInfo info = helper.helperInfo();
         for (RowWidgets row : rowWidgets) {
-            HmclHelperClient helper = InstanceManager.helper(minecraft);
             boolean running = helper.isRunning(row.instance().id());
             row.button().setMessage(Component.translatable(
                     running
                             ? "screen.minecraftminecraftlauncher.stop"
                             : "screen.minecraftminecraftlauncher.launch"
             ));
-            HmclHelperClient.HelperInfo info = helper.helperInfo();
             row.button().active = running || info == null || info.launchAvailable();
         }
+        installButton.active = info == null || info.launchAvailable();
     }
 
-    private static String failureMessage(Throwable error) {
+    static String failureMessage(Throwable error) {
         Throwable current = error;
         while (current.getCause() != null) {
             current = current.getCause();

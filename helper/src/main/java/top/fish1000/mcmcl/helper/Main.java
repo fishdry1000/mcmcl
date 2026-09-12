@@ -29,9 +29,10 @@ public final class Main {
             if (!Files.isDirectory(repository)) {
                 throw new IllegalArgumentException("Repository is not a directory: " + repository);
             }
+            String downloadProvider = parseDownloadProvider(args);
 
             RepositoryInstanceCatalog catalog = new RepositoryInstanceCatalog(repository);
-            HmclCoreAdapter adapter = HmclCoreAdapterFactory.create(repository, catalog);
+            HmclCoreAdapter adapter = HmclCoreAdapterFactory.create(repository, catalog, downloadProvider);
             HelperServer server = new HelperServer(adapter, new JsonLineWriter(protocolOutput));
             try (BufferedReader input = new BufferedReader(
                     new InputStreamReader(System.in, StandardCharsets.UTF_8))) {
@@ -45,7 +46,11 @@ public final class Main {
             exitCode = 1;
         }
 
-        if (exitCode != 0) {
+        // The JavaFX toolkit keeps a non-daemon thread alive, so the
+        // standalone helper must terminate the JVM explicitly.  In-process
+        // callers (the protocol tests) set mcmcl.helper.embedded to keep
+        // control of the JVM.
+        if (!Boolean.getBoolean("mcmcl.helper.embedded")) {
             System.exit(exitCode);
         }
     }
@@ -62,9 +67,14 @@ public final class Main {
                     throw new IllegalArgumentException("--repository may be specified only once");
                 }
                 repository = Path.of(args[i]).toAbsolutePath().normalize();
+            } else if ("--download-provider".equals(arg)) {
+                // Validated by the adapter factory; parse here for the
+                // duplicate-argument check.
+                parseDownloadProviderValue(args, i);
+                i++;
             } else if ("--help".equals(arg) || "-h".equals(arg)) {
                 throw new IllegalArgumentException(
-                        "usage: java -jar mcmcl-hmcl-helper.jar --repository <root>");
+                        "usage: java -jar mcmcl-hmcl-helper.jar --repository <root> [--download-provider mojang|bmclapi]");
             } else {
                 throw new IllegalArgumentException("Unknown argument: " + arg);
             }
@@ -73,6 +83,30 @@ public final class Main {
             throw new IllegalArgumentException("Missing required argument: --repository <root>");
         }
         return repository;
+    }
+
+    static String parseDownloadProvider(String[] args) {
+        String provider = "mojang";
+        for (int i = 0; i < args.length; i++) {
+            if ("--download-provider".equals(args[i])) {
+                provider = parseDownloadProviderValue(args, i);
+            }
+        }
+        return provider;
+    }
+
+    private static String parseDownloadProviderValue(String[] args, int index) {
+        if (index + 1 >= args.length || args[index + 1].isBlank()) {
+            throw new IllegalArgumentException(
+                    "--download-provider requires a value: mojang, bmclapi, or an http(s) mirror URL");
+        }
+        String value = args[index + 1];
+        if ("mojang".equals(value) || "bmclapi".equals(value)
+                || value.startsWith("http://") || value.startsWith("https://")) {
+            return value;
+        }
+        throw new IllegalArgumentException(
+                "--download-provider must be mojang, bmclapi, or an http(s) URL: " + value);
     }
 
     private static void error(PrintStream stream, String message) {

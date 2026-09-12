@@ -43,6 +43,7 @@ public final class HmclHelperClient implements AutoCloseable {
     private final Object processLock = new Object();
     private final Map<String, CompletableFuture<JsonObject>> pendingRequests = new ConcurrentHashMap<>();
     private final Map<String, LaunchHandle> runningInstances = new ConcurrentHashMap<>();
+    private final Map<String, InstallHandle> runningInstalls = new ConcurrentHashMap<>();
     private final Map<String, Consumer<String>> logSinks = new ConcurrentHashMap<>();
 
     private volatile Process process;
@@ -62,18 +63,46 @@ public final class HmclHelperClient implements AutoCloseable {
         return send(request).thenApply(this::parseInstances);
     }
 
+    public CompletableFuture<List<RemoteVersion>> remoteVersions() throws IOException {
+        JsonObject request = new JsonObject();
+        request.addProperty("command", "remoteVersions");
+        return send(request).thenApply(this::parseRemoteVersions);
+    }
+
     public LaunchHandle launch(HmclInstance instance, Minecraft minecraft, Consumer<String> logSink)
             throws IOException {
         User user = minecraft.getUser();
         JsonObject request = new JsonObject();
         request.addProperty("command", "launch");
         request.addProperty("instanceId", instance.id());
-        request.addProperty("username", user.getName());
-        request.addProperty("uuid", user.getProfileId().toString());
-        request.addProperty("accessToken", user.getAccessToken());
-        request.addProperty("userType", "msa");
-        user.getClientId().ifPresent(value -> request.addProperty("clientId", value));
-        user.getXuid().ifPresent(value -> request.addProperty("xuid", value));
+        if (Config.OFFLINE_MODE.get()) {
+            String username = Config.OFFLINE_USERNAME.get();
+            if (username.isBlank()) {
+                username = user.getName();
+            }
+            request.addProperty("username", username);
+            request.addProperty("uuid", UUID
+                    .nameUUIDFromBytes(("OfflinePlayer:" + username).getBytes(StandardCharsets.UTF_8))
+                    .toString());
+            request.addProperty("accessToken", UUID.randomUUID().toString());
+            request.addProperty("userType", "msa");
+        } else {
+            request.addProperty("username", user.getName());
+            request.addProperty("uuid", user.getProfileId().toString());
+            request.addProperty("accessToken", user.getAccessToken());
+            request.addProperty("userType", "msa");
+            user.getClientId().ifPresent(value -> request.addProperty("clientId", value));
+            user.getXuid().ifPresent(value -> request.addProperty("xuid", value));
+        }
+
+        String javaPath = Config.JAVA_PATH.get();
+        if (!javaPath.isBlank()) {
+            request.addProperty("javaPath", javaPath);
+        }
+        int maxMemory = Config.MAX_MEMORY.get();
+        if (maxMemory > 0) {
+            request.addProperty("maxMemory", maxMemory);
+        }
 
         LaunchHandle handle = new LaunchHandle(
                 instance.id(), new CompletableFuture<>(), new CompletableFuture<>());
@@ -106,12 +135,71 @@ public final class HmclHelperClient implements AutoCloseable {
         return handle != null && !handle.exitCode().isDone();
     }
 
+    /** Starts installing {@code gameVersion} into a new instance and reports progress through {@code logSink}. */
+    public InstallHandle install(String instanceId, String gameVersion, Consumer<String> logSink)
+            throws IOException {
+        return startInstall("install", instanceId, gameVersion, logSink);
+    }
+
+    /** Starts repairing an existing instance; accepted and terminal events mirror {@link #install}. */
+    public InstallHandle repair(String instanceId, Consumer<String> logSink) throws IOException {
+        return startInstall("repair", instanceId, null, logSink);
+    }
+
+    public boolean isInstalling(String instanceId) {
+        InstallHandle install = runningInstalls.get(instanceId);
+        return install != null && !install.completion().isDone();
+    }
+
+    private InstallHandle startInstall(String command, String instanceId, String gameVersion, Consumer<String> logSink)
+            throws IOException {
+        if (instanceId == null || instanceId.isBlank()) {
+            throw new IllegalArgumentException("instanceId must not be blank");
+        }
+        if ("install".equals(command) && (gameVersion == null || gameVersion.isBlank())) {
+            throw new IllegalArgumentException("gameVersion must not be blank");
+        }
+
+        InstallHandle handle = new InstallHandle(instanceId, new CompletableFuture<>());
+        registerInstall(instanceId, handle);
+        if (logSink != null) {
+            logSinks.put(instanceId, logSink);
+        }
+
+        JsonObject request = new JsonObject();
+        request.addProperty("command", command);
+        request.addProperty("instanceId", instanceId);
+        if (gameVersion != null) {
+            request.addProperty("gameVersion", gameVersion);
+        }
+
+        try {
+            send(request).whenComplete((response, error) -> {
+                if (error != null) {
+                    failInstall(instanceId, error);
+                    return;
+                }
+                try {
+                    requireSuccess(response);
+                } catch (IOException exception) {
+                    failInstall(instanceId, exception);
+                }
+            });
+        } catch (IOException | RuntimeException exception) {
+            failInstall(instanceId, exception);
+            throw exception;
+        }
+        return handle;
+    }
+
     public HelperInfo helperInfo() {
         return helperInfo;
     }
 
     public void stop(String instanceId) {
-        if (!isRunning(instanceId)) {
+        boolean running = isRunning(instanceId);
+        boolean installing = isInstalling(instanceId);
+        if (!running && !installing) {
             return;
         }
 
@@ -121,17 +209,17 @@ public final class HmclHelperClient implements AutoCloseable {
         try {
             send(request).whenComplete((response, error) -> {
                 if (error != null) {
-                    failLaunch(instanceId, error);
+                    failStop(instanceId, running, installing, error);
                     return;
                 }
                 try {
                     requireSuccess(response);
                 } catch (IOException exception) {
-                    failLaunch(instanceId, exception);
+                    failStop(instanceId, running, installing, exception);
                 }
             });
         } catch (IOException exception) {
-            failLaunch(instanceId, exception);
+            failStop(instanceId, running, installing, exception);
         }
     }
 
@@ -220,8 +308,12 @@ public final class HmclHelperClient implements AutoCloseable {
                      "-jar",
                      helperJar.toString(),
                     "--repository",
-                    repositoryDirectory.toString()
+                     repositoryDirectory.toString()
             );
+            String downloadProvider = Config.DOWNLOAD_PROVIDER.get();
+            if ("mojang".equals(downloadProvider) || "bmclapi".equals(downloadProvider)) {
+                builder.command().addAll(List.of("--download-provider", downloadProvider));
+            }
             builder.directory(workingDirectory.toFile());
             startedProcess = builder.start();
             process = startedProcess;
@@ -345,6 +437,11 @@ public final class HmclHelperClient implements AutoCloseable {
                 IOException exception = new IOException(message);
                 handle.started().completeExceptionally(exception);
                 handle.exitCode().completeExceptionally(exception);
+                return;
+            }
+            InstallHandle install = runningInstalls.remove(instanceId);
+            if (install != null && !install.completion().isDone()) {
+                install.completion().completeExceptionally(new IOException(message));
             }
         } else if ("exit".equals(eventName)) {
             LaunchHandle handle = runningInstances.remove(instanceId);
@@ -356,6 +453,11 @@ public final class HmclHelperClient implements AutoCloseable {
                             new IOException("HMCL game process exited before reporting startup"));
                 }
                 handle.exitCode().complete(exitCode);
+                return;
+            }
+            InstallHandle install = runningInstalls.remove(instanceId);
+            if (install != null && !install.completion().isDone()) {
+                install.completion().complete(integer(event, "code", -1));
             }
         }
     }
@@ -401,6 +503,28 @@ public final class HmclHelperClient implements AutoCloseable {
         }
     }
 
+    private List<RemoteVersion> parseRemoteVersions(JsonObject response) {
+        try {
+            requireSuccess(response);
+            JsonArray array = response.getAsJsonArray("versions");
+            List<RemoteVersion> result = new ArrayList<>();
+            if (array == null) {
+                return List.of();
+            }
+            for (JsonElement element : array) {
+                JsonObject version = element.getAsJsonObject();
+                result.add(new RemoteVersion(
+                        string(version, "id", ""),
+                        string(version, "type", ""),
+                        string(version, "releaseTime", "")
+                ));
+            }
+            return List.copyOf(result);
+        } catch (IOException exception) {
+            throw new IllegalStateException(exception.getMessage(), exception);
+        }
+    }
+
     private static void requireSuccess(JsonObject response) throws IOException {
         JsonElement ok = response.get("ok");
         if (ok == null || !ok.isJsonPrimitive() || !ok.getAsBoolean()) {
@@ -414,6 +538,23 @@ public final class HmclHelperClient implements AutoCloseable {
         if (handle != null) {
             handle.started().completeExceptionally(error);
             handle.exitCode().completeExceptionally(error);
+        }
+    }
+
+    private void failInstall(String instanceId, Throwable error) {
+        InstallHandle install = runningInstalls.remove(instanceId);
+        logSinks.remove(instanceId);
+        if (install != null) {
+            install.completion().completeExceptionally(error);
+        }
+    }
+
+    private void failStop(String instanceId, boolean running, boolean installing, Throwable error) {
+        if (running) {
+            failLaunch(instanceId, error);
+        }
+        if (installing) {
+            failInstall(instanceId, error);
         }
     }
 
@@ -444,7 +585,29 @@ public final class HmclHelperClient implements AutoCloseable {
             handle.exitCode().completeExceptionally(error);
         }
         runningInstances.clear();
+        for (InstallHandle install : runningInstalls.values()) {
+            install.completion().completeExceptionally(error);
+        }
+        runningInstalls.clear();
         logSinks.clear();
+    }
+
+    private void registerInstall(String instanceId, InstallHandle handle) throws IOException {
+        while (true) {
+            InstallHandle current = runningInstalls.get(instanceId);
+            if (current != null) {
+                if (!current.completion().isDone()) {
+                    throw new IOException("Instance is already installing: " + instanceId);
+                }
+                if (!runningInstalls.replace(instanceId, current, handle)) {
+                    continue;
+                }
+                return;
+            }
+            if (runningInstalls.putIfAbsent(instanceId, handle) == null) {
+                return;
+            }
+        }
     }
 
     private void registerLaunch(String instanceId, LaunchHandle handle) throws IOException {
@@ -537,6 +700,13 @@ public final class HmclHelperClient implements AutoCloseable {
             String instanceId,
             CompletableFuture<Void> started,
             CompletableFuture<Integer> exitCode) {
+    }
+
+    /** Tracks one accepted install/repair request; {@code completion} gets the process exit code. */
+    public record InstallHandle(String instanceId, CompletableFuture<Integer> completion) {
+    }
+
+    public record RemoteVersion(String id, String type, String releaseTime) {
     }
 
     public record HelperInfo(

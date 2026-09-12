@@ -34,6 +34,21 @@ public final class UnavailableHmclCoreAdapter implements HmclCoreAdapter {
     }
 
     @Override
+    public boolean isInstallAvailable() {
+        return false;
+    }
+
+    @Override
+    public List<RemoteVersionDescriptor> listRemoteVersions() {
+        throw new UnsupportedOperationException(unavailableMessage());
+    }
+
+    @Override
+    public HmclInstallHandle install(HmclInstallRequest request, HmclLaunchEventSink events) {
+        throw new UnsupportedOperationException(unavailableMessage());
+    }
+
+    @Override
     public String unavailableMessage() {
         return "HMCL Core adapter is not configured; no launch.json fallback is available";
     }

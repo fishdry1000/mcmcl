@@ -14,7 +14,9 @@ public record HmclLaunchRequest(
         String accessToken,
         String userType,
         String xuid,
-        String clientId) {
+        String clientId,
+        String javaPath,
+        Integer maxMemory) {
 
     public static HmclLaunchRequest from(Map<String, Object> request) throws ProtocolException {
         String instanceId = Json.requiredInstanceId(request);
@@ -24,6 +26,8 @@ public record HmclLaunchRequest(
         String userType = Json.requiredString(request, "userType");
         String xuid = Json.optionalString(request, "xuid");
         String clientId = Json.optionalString(request, "clientId");
+        String javaPath = Json.optionalString(request, "javaPath");
+        Integer maxMemory = optionalPositiveInt(request, "maxMemory");
 
         final UUID uuid;
         try {
@@ -32,7 +36,23 @@ public record HmclLaunchRequest(
             throw new ProtocolException("uuid must be a UUID string");
         }
 
-        return new HmclLaunchRequest(instanceId, username, uuid, accessToken, userType, xuid, clientId);
+        return new HmclLaunchRequest(
+                instanceId, username, uuid, accessToken, userType, xuid, clientId, javaPath, maxMemory);
+    }
+
+    private static Integer optionalPositiveInt(Map<String, Object> request, String key)
+            throws ProtocolException {
+        Object value = request.get(key);
+        if (value == null) {
+            return null;
+        }
+        if (!(value instanceof Number number) || number.intValue() != number.doubleValue()) {
+            throw new ProtocolException(key + " must be an integer");
+        }
+        if (number.intValue() <= 0) {
+            throw new ProtocolException(key + " must be positive");
+        }
+        return number.intValue();
     }
 
     /** Avoid accidentally logging credentials while debugging adapter code. */
@@ -44,6 +64,8 @@ public record HmclLaunchRequest(
                 + ", accessToken=<redacted>"
                 + ", userType=" + userType
                 + ", xuid=" + xuid
-                + ", clientId=" + clientId + ']';
+                + ", clientId=" + clientId
+                + ", javaPath=" + javaPath
+                + ", maxMemory=" + maxMemory + ']';
     }
 }

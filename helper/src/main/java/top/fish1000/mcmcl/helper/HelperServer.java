@@ -1,6 +1,8 @@
 package top.fish1000.mcmcl.helper;
 
 import top.fish1000.mcmcl.helper.hmcl.HmclCoreAdapter;
+import top.fish1000.mcmcl.helper.hmcl.HmclInstallHandle;
+import top.fish1000.mcmcl.helper.hmcl.HmclInstallRequest;
 import top.fish1000.mcmcl.helper.hmcl.HmclLaunchEventSink;
 import top.fish1000.mcmcl.helper.hmcl.HmclLaunchHandle;
 import top.fish1000.mcmcl.helper.hmcl.HmclLaunchRequest;
@@ -43,7 +45,15 @@ public final class HelperServer {
         thread.setDaemon(true);
         return thread;
     });
+    // The repository backend allows only one exclusive draft at a time, so
+    // installs are serialized on a single thread.
+    private final ExecutorService installExecutor = Executors.newSingleThreadExecutor(runnable -> {
+        Thread thread = new Thread(runnable, "mcmcl-hmcl-install");
+        thread.setDaemon(true);
+        return thread;
+    });
     private final ConcurrentMap<String, LaunchSlot> launches = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, InstallSlot> installs = new ConcurrentHashMap<>();
     private final AtomicBoolean shuttingDown = new AtomicBoolean();
 
     public HelperServer(HmclCoreAdapter adapter, JsonLineWriter output) {
@@ -93,6 +103,9 @@ public final class HelperServer {
                 case "hello" -> hello(id);
                 case "list" -> list(id);
                 case "launch" -> launch(id, request);
+                case "install" -> install(id, request);
+                case "repair" -> repair(id, request);
+                case "remoteVersions" -> remoteVersions(id);
                 case "stop" -> stop(id, request);
                 case "shutdown" -> {
                     respondOk(id, "shutdown requested");
@@ -116,6 +129,7 @@ public final class HelperServer {
         response.put("helperVersion", HelperBuildInfo.helperVersion());
         response.put("backend", adapter.backendName());
         response.put("launchAvailable", adapter.isLaunchAvailable());
+        response.put("installAvailable", adapter.isInstallAvailable());
         response.put("hmclProfile", HelperBuildInfo.hmclProfile());
         response.put("hmclCommit", HelperBuildInfo.hmclCommit());
         output.write(response);
@@ -135,6 +149,117 @@ public final class HelperServer {
             output.write(body);
         } catch (Exception e) {
             respondError(id, CODE_INTERNAL_ERROR, safeMessage(e));
+        }
+    }
+
+    private void remoteVersions(Object id) {
+        if (!adapter.isInstallAvailable()) {
+            respondError(id, CODE_HMCL_CORE_UNAVAILABLE, adapter.unavailableMessage());
+            return;
+        }
+        try {
+            List<Map<String, Object>> versions = new ArrayList<>();
+            for (var version : adapter.listRemoteVersions()) {
+                versions.add(version.toJson());
+            }
+            Map<String, Object> body = new LinkedHashMap<>();
+            body.put("type", "response");
+            body.put("id", id);
+            body.put("ok", true);
+            body.put("versions", versions);
+            output.write(body);
+        } catch (Exception e) {
+            respondError(id, CODE_INTERNAL_ERROR, safeMessage(e));
+        }
+    }
+
+    private void install(Object id, Map<String, Object> request) {
+        acceptInstall(id, request, true);
+    }
+
+    private void repair(Object id, Map<String, Object> request) {
+        acceptInstall(id, request, false);
+    }
+
+    private void acceptInstall(Object id, Map<String, Object> request, boolean requireGameVersion) {
+        HmclInstallRequest installRequest;
+        try {
+            installRequest = requireGameVersion
+                    ? HmclInstallRequest.install(request)
+                    : HmclInstallRequest.repair(request);
+        } catch (ProtocolException e) {
+            respondError(id, CODE_INVALID_REQUEST, e.getMessage());
+            return;
+        }
+
+        if (!adapter.isInstallAvailable()) {
+            respondError(id, CODE_HMCL_CORE_UNAVAILABLE, adapter.unavailableMessage());
+            return;
+        }
+
+        String instanceId = installRequest.instanceId();
+        InstallSlot slot = new InstallSlot(instanceId);
+        if (installs.putIfAbsent(instanceId, slot) != null) {
+            respondError(id, CODE_ALREADY_RUNNING, "instance is already installing: " + instanceId);
+            return;
+        }
+
+        respondOk(id, requireGameVersion ? "install accepted" : "repair accepted");
+        try {
+            slot.task = installExecutor.submit(() -> startInstall(slot, installRequest));
+        } catch (Exception exception) {
+            installs.remove(instanceId, slot);
+            emitError(instanceId, CODE_INTERNAL_ERROR, safeMessage(exception));
+        }
+    }
+
+    private void startInstall(InstallSlot slot, HmclInstallRequest request) {
+        slot.taskStarted.set(true);
+        AtomicBoolean terminal = new AtomicBoolean();
+        HmclLaunchEventSink sink = new HmclLaunchEventSink() {
+            @Override
+            public void started() {
+                // Installs have no process; progress is reported through log.
+            }
+
+            @Override
+            public void log(String line) {
+                if (!terminal.get()) {
+                    emitLog(request.instanceId(), line);
+                }
+            }
+
+            @Override
+            public void exit(int code) {
+                if (terminal.compareAndSet(false, true)) {
+                    installs.remove(request.instanceId(), slot);
+                    emitExit(request.instanceId(), code);
+                }
+            }
+
+            @Override
+            public void error(String message) {
+                if (terminal.compareAndSet(false, true)) {
+                    installs.remove(request.instanceId(), slot);
+                    emitError(request.instanceId(), "HMCL_CORE_ERROR", message);
+                }
+            }
+        };
+
+        try {
+            HmclInstallHandle handle = adapter.install(request, sink);
+            if (handle == null) {
+                throw new IllegalStateException("HMCL adapter returned no install handle");
+            }
+            slot.handle = handle;
+        } catch (Exception e) {
+            installs.remove(request.instanceId(), slot);
+            if (terminal.compareAndSet(false, true)) {
+                emitError(
+                        request.instanceId(),
+                        slot.cancelRequested.get() ? "CANCELLED" : "HMCL_CORE_ERROR",
+                        slot.cancelRequested.get() ? "install cancelled" : safeMessage(e));
+            }
         }
     }
 
@@ -240,18 +365,46 @@ public final class HelperServer {
             return;
         }
 
-        LaunchSlot slot = launches.get(instanceId);
-        if (slot == null) {
-            respondError(id, CODE_NOT_RUNNING, "instance is not launching or running: " + instanceId);
+        LaunchSlot launchSlot = launches.get(instanceId);
+        if (launchSlot != null) {
+            launchSlot.stopRequested.set(true);
+            try {
+                stopSlot(launchSlot);
+                respondOk(id, "stop requested");
+            } catch (Exception e) {
+                respondError(id, CODE_INTERNAL_ERROR, safeMessage(e));
+            }
             return;
         }
 
-        slot.stopRequested.set(true);
-        try {
-            stopSlot(slot);
-            respondOk(id, "stop requested");
-        } catch (Exception e) {
-            respondError(id, CODE_INTERNAL_ERROR, safeMessage(e));
+        InstallSlot installSlot = installs.get(instanceId);
+        if (installSlot != null) {
+            installSlot.cancelRequested.set(true);
+            try {
+                stopInstallSlot(installSlot);
+                respondOk(id, "stop requested");
+            } catch (Exception e) {
+                respondError(id, CODE_INTERNAL_ERROR, safeMessage(e));
+            }
+            return;
+        }
+
+        respondError(id, CODE_NOT_RUNNING, "instance is not launching, installing, or running: " + instanceId);
+    }
+
+    private void stopInstallSlot(InstallSlot slot) {
+        HmclInstallHandle handle = slot.handle;
+        if (handle != null) {
+            try {
+                handle.cancel();
+            } catch (Exception e) {
+                // Cancellation is best-effort; the install task reports the
+                // terminal error event itself.
+            }
+        }
+        Future<?> task = slot.task;
+        if (task != null && slot.taskStarted.get()) {
+            task.cancel(true);
         }
     }
 
@@ -269,6 +422,11 @@ public final class HelperServer {
             }
         }
 
+        for (InstallSlot slot : List.copyOf(installs.values())) {
+            slot.cancelRequested.set(true);
+            stopInstallSlot(slot);
+        }
+
         launchExecutor.shutdown();
         try {
             if (!launchExecutor.awaitTermination(5, TimeUnit.SECONDS)) {
@@ -278,6 +436,15 @@ public final class HelperServer {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             launchExecutor.shutdownNow();
+        }
+        installExecutor.shutdown();
+        try {
+            if (!installExecutor.awaitTermination(5, TimeUnit.SECONDS)) {
+                installExecutor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            installExecutor.shutdownNow();
         }
         try {
             adapter.shutdown();
@@ -387,6 +554,18 @@ public final class HelperServer {
         private volatile Future<?> task;
 
         private LaunchSlot(String instanceId) {
+            this.instanceId = instanceId;
+        }
+    }
+
+    private static final class InstallSlot {
+        private final String instanceId;
+        private final AtomicBoolean taskStarted = new AtomicBoolean();
+        private final AtomicBoolean cancelRequested = new AtomicBoolean();
+        private volatile HmclInstallHandle handle;
+        private volatile Future<?> task;
+
+        private InstallSlot(String instanceId) {
             this.instanceId = instanceId;
         }
     }

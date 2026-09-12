@@ -25,8 +25,37 @@ public interface HmclCoreAdapter {
         return true;
     }
 
+    /** Whether install/repair is currently backed by a real HMCL implementation. */
+    default boolean isInstallAvailable() {
+        return false;
+    }
+
     default String unavailableMessage() {
         return "HMCL Core adapter is not configured";
+    }
+
+    /**
+     * Lists game versions installable from the configured download provider.
+     *
+     * <p>This talks to the Mojang/BMCLAPI manifest and is therefore only
+     * meaningful for the real HMCL profile.</p>
+     */
+    default List<RemoteVersionDescriptor> listRemoteVersions() throws Exception {
+        throw new UnsupportedOperationException(unavailableMessage());
+    }
+
+    /**
+     * Starts an asynchronous install or repair.
+     *
+     * <p>A request with a game version creates a new vanilla instance;
+     * a request without one re-downloads missing files of an existing
+     * instance. The adapter must report progress through
+     * {@link HmclLaunchEventSink#log(String)} and finish with exactly one
+     * call to {@link HmclLaunchEventSink#exit(int)} or
+     * {@link HmclLaunchEventSink#error(String)}.</p>
+     */
+    default HmclInstallHandle install(HmclInstallRequest request, HmclLaunchEventSink events) throws Exception {
+        throw new UnsupportedOperationException(unavailableMessage());
     }
 
     /**

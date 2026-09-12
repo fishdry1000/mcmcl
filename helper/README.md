@@ -6,7 +6,9 @@
 
 - JSON Lines 协议、请求校验、异步事件转发、停止和关闭生命周期已实现。
 - `list` 会读取官方/HMCL 仓库的 `versions/<instanceId>/` 目录，并支持 `<instanceId>.json` 以及“目录中唯一 JSON 文件”两种 manifest 位置。
-- `src/hmcl/java/` 已有真实 HMCL Core adapter：headless repository/instance subclass、refresh/list、`AuthInfo`、`LaunchOptions`、`DefaultLauncher`、`ProcessListener` 和 `ManagedProcess` 的桥接。
+- `remoteVersions` 从 Mojang manifest（或 BMCLAPI 兼容镜像）获取可安装的原版版本列表；`install` 下载并安装新的原版实例；`repair` 为已有实例补齐缺失的客户端 jar、库和资源文件。安装通过 `DefaultGameBuilder`/`checkGameCompletionAsync` 走 HMCL Core 的官方下载管线。
+- `launch` 支持可选的 `javaPath`（通过运行 `<java> -version` 探测版本）和 `maxMemory`（MB）。
+- `src/hmcl/java/` 已有真实 HMCL Core adapter：headless repository/instance subclass、refresh/list、`AuthInfo`、`LaunchOptions`、`DefaultLauncher`、`ProcessListener` 和 `ManagedProcess` 的桥接，以及上述安装能力。adapter 会初始化 JavaFX 工具包（HMCL Core 的任务进度与快照发布依赖它）和全局 `CacheRepository`（ETag 下载缓存，位于仓库根目录的 `cache/`）。
 - 默认构建不编译 `src/hmcl/java/`，`Main` 通过 provider/factory 得到 `UnavailableHmclCoreAdapter`；它会返回 `HMCL_CORE_UNAVAILABLE`，不会读取或执行 `launch.json`。
 - 传入 `-PhmclCheckout=<固定 checkout>` 或 `-PhmclVersion=<本机发布版本>` 后，Gradle 才把 HMCL 源码 profile 加入编译并让 `Main` 加载真实 provider。profile 构建会把 HMCL Core、传递依赖和当前平台 JavaFX 打进一个可由 `java -jar` 直接启动的 JAR。
 
@@ -53,7 +55,7 @@ Git checkout 若有已跟踪文件改动，构建会拒绝继续；仅本地调�
 `-PhelperInstallDirectory=<目录>` 覆盖。profile JAR 包含当前平台的 JavaFX
 原生库，正式二进制应按操作系统和 CPU 架构分别构建、标记和发布。
 
-`--repository` 是包含 `versions/`、`libraries/` 和 `assets/` 的游戏仓库根目录；路径必须存在且为目录。也可以直接使用 Gradle 的 `run` 任务。
+`--repository` 是包含 `versions/`、`libraries/` 和 `assets/` 的游戏仓库根目录；路径必须存在且为目录。可选的 `--download-provider` 选择安装源：`mojang`（默认，Mojang 官方）、`bmclapi`（_bmclapi2.bangbang93.com 镜像）或任意 BMCLAPI 兼容的 `http(s)://` 根 URL。也可以直接使用 Gradle 的 `run` 任务。
 
 真实 profile 使用 helper 启动 JVM 自己的 `JavaRuntime.getDefault()` 作为 Minecraft Java。协议代码和 HMCL Core ABI 以 Java 17 为基线；默认无依赖构建可用 JDK 17。当前 HMCL checkout 的 JavaFX 25 profile 需要 JDK 25 构建、测试和运行，这也与 Minecraft 26.2 一致。profile 构建输出放在 `helper/build-hmcl/`，默认无依赖构建仍放在 `helper/build/`。构建脚本默认选择 Windows x64 的 JavaFX 25；可用 `-PhmclJavafxVersion` 和 `-PhmclJavafxClassifier` 覆盖版本/平台。
 
@@ -68,22 +70,34 @@ stdout 保证只输出协议 JSON；启动参数错误写入 stderr，helper 进
 ```json
 {"id":"h1","command":"hello"}
 {"id":"l1","command":"list"}
-{"id":"l2","command":"launch","instanceId":"26.2","username":"Player","uuid":"00000000-0000-0000-0000-000000000000","accessToken":"...","userType":"msa","xuid":"...","clientId":"..."}
+{"id":"rv1","command":"remoteVersions"}
+{"id":"i1","command":"install","instanceId":"1.21.1","gameVersion":"1.21.1"}
+{"id":"r1","command":"repair","instanceId":"26.2"}
+{"id":"l2","command":"launch","instanceId":"26.2","username":"Player","uuid":"00000000-0000-0000-0000-000000000000","accessToken":"...","userType":"msa","xuid":"...","clientId":"...","javaPath":"C:\\path\\bin\\java.exe","maxMemory":4096}
 {"id":"s1","command":"stop","instanceId":"26.2"}
 {"id":"q1","command":"shutdown"}
 ```
 
-`launch` 的必填字段是 `instanceId`、`username`、`uuid`、`accessToken`、`userType`；`xuid` 和 `clientId` 可选。`uuid` 必须是标准 UUID 字符串。当前协议不携带 `userProperties`，真正的 HMCL 适配器应在内部按账号类型构造对应的属性 JSON。
+`launch` 的必填字段是 `instanceId`、`username`、`uuid`、`accessToken`、`userType`；`xuid`、`clientId`、`javaPath` 和 `maxMemory` 可选。`javaPath` 指向目标游戏使用的 Java 可执行文件（helper 会运行 `-version` 探测版本）；`maxMemory` 是最大堆（MB）。离线账号由模组侧构造：`uuid` 使用 `OfflinePlayer:<用户名>` 的 nameUUID，`accessToken` 使用随机 UUID，`userType` 仍为 `msa`。当前协议不携带 `userProperties`，真正的 HMCL 适配器会在内部按账号类型构造对应的属性 JSON。
 
-模组在其他请求前自动发送 `hello`。它返回协议版本、helper 版本、后端名称、
-是否具备真实启动能力以及构建所对应的 HMCL 提交，例如：
+`install` 创建新的原版实例（`instanceId` 必须不存在，`gameVersion` 为要安装的版本 id）；`repair` 为已有实例补齐缺失的客户端 jar、库与资源文件。两者都是异步操作，复用 `launch` 的事件模型但没有 `started` 事件：进度通过 `log` 事件返回，成功以 `exit`(code 0) 结束，失败以 `error` 事件结束。安装串行执行（HMCL 仓库一次只允许一个独占 draft），重复请求返回 `ALREADY_RUNNING`；安装进行中的 `launch` 会直接失败。`stop` 现在同时作用于启动槽与安装/修复槽；安装取消是尽力而为（中断 + `TaskExecutor.cancel()`），关闭 helper 始终可靠终止。
+
+模组在其他请求前自动发送 `hello`。它返回协议版本、helper 版本、后端名称、是否具备真实启动/安装能力以及构建所对应的 HMCL 提交，例如：
 
 ```json
-{"type":"response","id":"h1","ok":true,"protocolVersion":1,"helperVersion":"0.1.0","backend":"hmcl-core","launchAvailable":true,"hmclProfile":true,"hmclCommit":"df52bc6e81e2e1116c131483dfb9996fdb7b2b10"}
+{"type":"response","id":"h1","ok":true,"protocolVersion":1,"helperVersion":"0.1.0","backend":"hmcl-core","launchAvailable":true,"installAvailable":true,"hmclProfile":true,"hmclCommit":"df52bc6e81e2e1116c131483dfb9996fdb7b2b10"}
 ```
 
 协议版本不兼容时，模组会关闭该 helper 并显示明确错误；默认无 HMCL profile 的
-JAR 会报告 `backend:"unavailable"` 和 `launchAvailable:false`。
+JAR 会报告 `backend:"unavailable"`、`launchAvailable:false` 和 `installAvailable:false`。
+
+### remoteVersions 响应
+
+```json
+{"type":"response","id":"rv1","ok":true,"versions":[{"id":"26.2","type":"release","releaseTime":"2026-06-09T12:05:32+00:00"}]}
+```
+
+`versions` 按发布时间从新到旧排序，覆盖全部类型（release/snapshot/old 等），由调用方自行过滤。未接入 HMCL Core 时返回 `HMCL_CORE_UNAVAILABLE`。
 
 ### 响应
 
@@ -157,22 +171,26 @@ helper 的 `build.gradle` 只在传入 `hmclVersion` 或 `hmclCheckout` 时启�
 
 当前工作区的验证结果是：默认 `test`/`build` 成功；使用上述 HMCL checkout 的真实 profile `compileJava`、`test`、自包含 `jar`、`installDist` 和 `list`/`shutdown` 协议冒烟均成功。profile 测试还用动态 fixture 验证了 `DefaultLauncher` 的进程启动、stdout/stderr 转发和退出事件。没有 checkout 时，`hmclVersion` 方案仍只适合本地验证：需要先在同一 checkout 中执行 `:HMCLCore:publishToMavenLocal`，并同时锁定生成物与许可证材料。
 
-### 真实适配器还需要做的工作
+### 真实适配器的当前实现
 
 `RealHmclCoreAdapter` 已实现下面这条 profile-only 路径；如果 HMCL API 在未来 main 分支发生变化，编译失败会集中在 `src/hmcl/java`，默认协议 profile 不受影响：
 
 1. 创建或复用 headless 的 HMCL repository，调用 refresh 并解析 `GameInstanceID`；
 2. 用 `HmclLaunchRequest` 构造 HMCL `AuthInfo`；当前 Core 的 `AuthInfo` API 不接收 `xuid`/`clientId`，这两个字段仅保留在协议中供未来适配；
-3. 组装 `LaunchOptions`，选择实例运行目录和 Java runtime；
+3. 组装 `LaunchOptions`，选择实例运行目录、Java runtime（`javaPath` 存在时探测其版本，否则用 helper 自身 JVM）和 `maxMemory`；
 4. 创建 `DefaultLauncher`，把 `ProcessListener.onLog`、`onExit` 映射为 `HmclLaunchEventSink`；
 5. 保存 HMCL 的 `ManagedProcess`/任务句柄，在 `stop` 和 `shutdown` 中终止游戏进程；
-6. 给 helper 分发 HMCL Core 所需的 JavaFX runtime modules 和其传递依赖，并在发布前完成 GPL-3.0 合规审查。
+6. `install`/`repair` 通过 `DefaultDependencyManager` 的 `newGameBuilder`/`checkGameCompletionAsync` 执行，任务用 `TaskExecutor` 启动并等待（`whenComplete` 组合子依赖 executor 维护的状态，不能用裸 `Task.run()`）；取消通过中断 + `TaskExecutor.cancel()`；
+7. 给 helper 分发 HMCL Core 所需的 JavaFX runtime modules 和其传递依赖，并在发布前完成 GPL-3.0 合规审查。
 
 当前已验证真实 profile 能启动 headless helper、完成 `hello`/`list`/`shutdown`，
 并通过动态 JVM fixture 验证 `DefaultLauncher` 的实际进程启动、stdout/stderr
 转发和退出事件；也已用完整 Minecraft 26.2 文件集创建目标 Minecraft 进程、
-转发真实日志并通过 `stop` 结束。缺失依赖下载、Java 自动选择和更多加载器实例
-仍需单独验收。
+转发真实日志并通过 `stop` 结束。安装路径由本地 BMCLAPI 兼容 fixture 服务器
+验收：`remoteVersions` 列表、全新 `install`（版本 JSON、客户端 jar、资源索引
+均带 SHA-1 校验地下载落盘）、删除客户端 jar 后的 `repair` 补齐，以及"安装后
+启动该实例"的全链路。对真实 Mojang/BMCLAPI 服务器的下载验收需要联网环境，
+模组加载器实例（Forge/Fabric/NeoForge）仍需单独验收。
 
 ## 目录
 

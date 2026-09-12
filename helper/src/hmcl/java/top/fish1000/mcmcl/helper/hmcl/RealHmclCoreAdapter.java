@@ -1,29 +1,54 @@
 package top.fish1000.mcmcl.helper.hmcl;
 
 import org.jackhuang.hmcl.auth.AuthInfo;
+import org.jackhuang.hmcl.download.BMCLAPIDownloadProvider;
+import org.jackhuang.hmcl.download.DefaultCacheRepository;
+import org.jackhuang.hmcl.download.DefaultDependencyManager;
+import org.jackhuang.hmcl.download.DownloadProvider;
+import org.jackhuang.hmcl.download.GameBuilder;
+import org.jackhuang.hmcl.download.MojangDownloadProvider;
+import org.jackhuang.hmcl.download.game.GameVersionList;
+import org.jackhuang.hmcl.download.game.GameRemoteVersion;
 import org.jackhuang.hmcl.game.DefaultGameInstance;
 import org.jackhuang.hmcl.game.DefaultGameRepository;
 import org.jackhuang.hmcl.game.DefaultGameRepositoryLayout;
 import org.jackhuang.hmcl.game.DefaultGameRepositorySnapshot;
+import org.jackhuang.hmcl.game.GameComponentType;
 import org.jackhuang.hmcl.game.GameInstance;
 import org.jackhuang.hmcl.game.GameInstanceID;
 import org.jackhuang.hmcl.game.GameInstanceManifest;
 import org.jackhuang.hmcl.game.LaunchManifestNormalizer;
 import org.jackhuang.hmcl.game.LaunchOptions;
+import org.jackhuang.hmcl.game.ReleaseType;
+import org.jackhuang.hmcl.java.JavaInfo;
 import org.jackhuang.hmcl.java.JavaRuntime;
 import org.jackhuang.hmcl.launch.DefaultLauncher;
 import org.jackhuang.hmcl.launch.ProcessListener;
+import org.jackhuang.hmcl.task.Task;
+import org.jackhuang.hmcl.task.TaskExecutor;
+import org.jackhuang.hmcl.task.TaskListener;
+import org.jackhuang.hmcl.util.CacheRepository;
 import org.jackhuang.hmcl.util.platform.ManagedProcess;
+import org.jackhuang.hmcl.util.platform.Platform;
 import top.fish1000.mcmcl.helper.repository.InstanceDescriptor;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Real HMCL Core adapter, compiled only by the opt-in HMCL profile.
@@ -34,20 +59,58 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * itself leaves abstract; no HMCL GUI/settings module is required.</p>
  */
 public final class RealHmclCoreAdapter implements HmclCoreAdapter {
+    private static final Pattern JAVA_VERSION_OUTPUT =
+            Pattern.compile("(?:java|openjdk) version \"([^\"]+)\"");
+
     private final HeadlessGameRepository repository;
+    private final Path repositoryRoot;
+    private final String downloadProvider;
     private final Object repositoryLock = new Object();
     private final ConcurrentMap<String, LaunchContext> launches = new ConcurrentHashMap<>();
     private final Set<String> activeLaunches = ConcurrentHashMap.newKeySet();
     private final Set<String> pendingStops = ConcurrentHashMap.newKeySet();
+    private final AtomicBoolean installActive = new AtomicBoolean();
+    private final AtomicReference<TaskExecutor> activeInstallExecutor = new AtomicReference<>();
 
-    public RealHmclCoreAdapter(Path repositoryRoot) {
+    public RealHmclCoreAdapter(Path repositoryRoot, String downloadProvider) {
+        this.repositoryRoot = repositoryRoot.toAbsolutePath().normalize();
         this.repository = new HeadlessGameRepository(repositoryRoot);
+        this.downloadProvider = downloadProvider == null || downloadProvider.isBlank()
+                ? "mojang"
+                : downloadProvider;
+        // HMCL's FetchTask downloads every remote file through the global
+        // CacheRepository singleton, whose ETag index only exists after
+        // changeDirectory.  Keep the download cache inside the HMCL repository.
+        CacheRepository.getInstance().changeDirectory(this.repositoryRoot);
+        // HMCL Core publishes repository snapshots and task progress through
+        // JavaFX, so the toolkit must be running.  Note that the resulting
+        // FX thread is not a daemon and Platform.exit() does not reliably
+        // stop it without a launched Application; the process entry point
+        // therefore terminates the JVM explicitly.
+        try {
+            javafx.application.Platform.startup(() -> {
+            });
+        } catch (IllegalStateException alreadyRunning) {
+            // The toolkit is already up (another adapter started it).
+        } catch (Throwable t) {
+            System.err.println("mcmcl-hmcl-helper: JavaFX toolkit startup failed: " + t);
+        }
+    }
+
+    @Override
+    public boolean isInstallAvailable() {
+        return true;
     }
 
     @Override
     public List<InstanceDescriptor> listInstances() throws Exception {
         synchronized (repositoryLock) {
-            repository.refresh();
+            // An active install holds an exclusive repository draft, and HMCL
+            // Core rejects refresh() while a draft exists.  Serving the last
+            // snapshot keeps list working during long downloads.
+            if (!installActive.get()) {
+                repository.refresh();
+            }
             List<InstanceDescriptor> result = new ArrayList<>();
             for (GameInstance instance : repository.getSnapshot().getInstances()) {
                 result.add(new InstanceDescriptor(
@@ -62,9 +125,143 @@ public final class RealHmclCoreAdapter implements HmclCoreAdapter {
     }
 
     @Override
+    public List<RemoteVersionDescriptor> listRemoteVersions() throws Exception {
+        GameVersionList list = new GameVersionList(createDownloadProvider());
+        list.refreshAsync().run();
+        List<RemoteVersionDescriptor> result = new ArrayList<>();
+        for (GameRemoteVersion version : list.getVersions(null)) {
+            ReleaseType type = version.getType();
+            result.add(new RemoteVersionDescriptor(
+                    version.getGameVersion(),
+                    type == null ? "unknown" : type.name().toLowerCase(Locale.ROOT),
+                    version.getReleaseDate() == null ? "" : version.getReleaseDate().toString()));
+        }
+        result.sort(Comparator
+                .comparing(RemoteVersionDescriptor::releaseTime, Comparator.nullsLast(Comparator.naturalOrder()))
+                .reversed());
+        return result;
+    }
+
+    @Override
+    public HmclInstallHandle install(HmclInstallRequest request, HmclLaunchEventSink events) throws Exception {
+        if (Thread.currentThread().isInterrupted()) {
+            throw new InstallCancelledException();
+        }
+        if (!installActive.compareAndSet(false, true)) {
+            throw new IllegalStateException("another install or repair is already in progress");
+        }
+        try {
+            runInstall(request, events);
+            return () -> {
+            };
+        } finally {
+            installActive.set(false);
+            activeInstallExecutor.set(null);
+        }
+    }
+
+    private void runInstall(HmclInstallRequest request, HmclLaunchEventSink events) throws Exception {
+        GameInstanceID id = new GameInstanceID(request.instanceId());
+        DefaultDependencyManager dependencyManager = new DefaultDependencyManager(
+                repository,
+                createDownloadProvider(),
+                new DefaultCacheRepository(repositoryRoot));
+
+        Task<?> task;
+        synchronized (repositoryLock) {
+            checkInstallCancelled();
+            repository.refresh();
+            boolean exists = repository.hasInstance(id);
+            if (request.isNewInstall()) {
+                if (exists) {
+                    throw new IllegalStateException("instance already exists: " + request.instanceId());
+                }
+                events.log("installing " + request.gameVersion()
+                        + " as instance " + request.instanceId() + " ...");
+                GameBuilder builder = dependencyManager.newGameBuilder(id);
+                try {
+                    builder.component(GameComponentType.GAME, request.gameVersion());
+                    task = builder.buildAsync();
+                } finally {
+                    // No-op once buildAsync has transferred the draft, but it
+                    // releases the exclusive draft if anything failed early.
+                    builder.close();
+                }
+            } else {
+                if (!exists) {
+                    throw new IOException("no such instance: " + request.instanceId());
+                }
+                DefaultGameInstance instance = repository.getInstance(id);
+                events.log("repairing instance " + request.instanceId() + " ...");
+                task = dependencyManager.checkGameCompletionAsync(instance, instance.getResolvedManifest(), false);
+            }
+        }
+
+        checkInstallCancelled();
+        // Tasks composed with whenComplete rely on executor-maintained state;
+        // running them via Task.run() trips HMCL's own state assertions. The
+        // executor also enables cancelling a download in flight.
+        CountDownLatch done = new CountDownLatch(1);
+        AtomicBoolean success = new AtomicBoolean();
+        TaskExecutor executor = task.executor(new TaskListener() {
+            @Override
+            public void onStop(boolean taskSuccess, TaskExecutor finishedExecutor) {
+                success.set(taskSuccess);
+                done.countDown();
+            }
+        });
+        activeInstallExecutor.set(executor);
+        try {
+            executor.start();
+            while (true) {
+                try {
+                    done.await();
+                    break;
+                } catch (InterruptedException e) {
+                    // A stop request interrupts this thread; translate that
+                    // into an executor cancellation so downloads abort too.
+                    try {
+                        executor.cancel();
+                    } catch (Exception ignored) {
+                        // Already stopped.
+                    }
+                }
+            }
+        } finally {
+            activeInstallExecutor.compareAndSet(executor, null);
+        }
+
+        if (!success.get()) {
+            Exception failure = executor.getException();
+            if (executor.isCancelled() || failure == null) {
+                throw new InstallCancelledException();
+            }
+            throw failure;
+        }
+        events.log(request.isNewInstall() ? "install completed" : "repair completed");
+        events.exit(0);
+    }
+
+    private DownloadProvider createDownloadProvider() {
+        if ("bmclapi".equals(downloadProvider)) {
+            return new BMCLAPIDownloadProvider("https://bmclapi2.bangbang93.com");
+        }
+        if (!"mojang".equals(downloadProvider)
+                && (downloadProvider.startsWith("http://") || downloadProvider.startsWith("https://"))) {
+            // A custom BMCLAPI-compatible mirror root; also used by tests to
+            // point the installer at a local fixture server.
+            return new BMCLAPIDownloadProvider(downloadProvider);
+        }
+        return new MojangDownloadProvider();
+    }
+
+    @Override
     public HmclLaunchHandle launch(HmclLaunchRequest request, HmclLaunchEventSink events) throws Exception {
         if (Thread.currentThread().isInterrupted()) {
             throw new LaunchCancelledException();
+        }
+        if (installActive.get()) {
+            throw new IllegalStateException("an install or repair is in progress; launch again when it finishes");
         }
 
         String instanceId = request.instanceId();
@@ -95,12 +292,9 @@ public final class RealHmclCoreAdapter implements HmclCoreAdapter {
             GameInstanceManifest manifest = LaunchManifestNormalizer.repairForLaunch(
                     instance.getResolvedManifest());
             checkCancelled(context);
-            JavaRuntime java = JavaRuntime.getDefault();
-            if (java == null) {
-                throw new IOException("HMCL Core could not detect the helper JVM as a Java runtime");
-            }
+            JavaRuntime java = resolveJavaRuntime(request);
 
-            LaunchOptions options = new LaunchOptions.Builder()
+            LaunchOptions.Builder optionsBuilder = new LaunchOptions.Builder()
                     .setInstanceId(id)
                     .setGameDir(instance.getRunDirectory())
                     .setJava(java)
@@ -108,8 +302,11 @@ public final class RealHmclCoreAdapter implements HmclCoreAdapter {
                     .setProfileName("MCMCL")
                     .setWidth(854)
                     .setHeight(480)
-                    .setDaemon(false)
-                    .create();
+                    .setDaemon(false);
+            if (request.maxMemory() != null) {
+                optionsBuilder.setMaxMemory(request.maxMemory());
+            }
+            LaunchOptions options = optionsBuilder.create();
             checkCancelled(context);
             AuthInfo authInfo = new AuthInfo(
                     request.username(),
@@ -154,6 +351,45 @@ public final class RealHmclCoreAdapter implements HmclCoreAdapter {
         }
     }
 
+    private JavaRuntime resolveJavaRuntime(HmclLaunchRequest request) throws IOException {
+        String javaPath = request.javaPath();
+        if (javaPath == null || javaPath.isBlank()) {
+            JavaRuntime current = JavaRuntime.getDefault();
+            if (current == null) {
+                throw new IOException("HMCL Core could not detect the helper JVM as a Java runtime");
+            }
+            return current;
+        }
+        Path binary = Path.of(javaPath).toAbsolutePath().normalize();
+        if (!Files.isRegularFile(binary)) {
+            throw new IOException("Java executable does not exist: " + binary);
+        }
+        return JavaRuntime.of(binary, detectJavaInfo(binary), false);
+    }
+
+    private static JavaInfo detectJavaInfo(Path binary) throws IOException {
+        Process process = new ProcessBuilder(binary.toString(), "-version")
+                .redirectErrorStream(false)
+                .start();
+        String output;
+        try {
+            process.waitFor(15, TimeUnit.SECONDS);
+            output = new String(process.getErrorStream().readAllBytes(), StandardCharsets.UTF_8);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            process.destroyForcibly();
+            throw new IOException("interrupted while detecting the Java version of " + binary, e);
+        } finally {
+            process.destroyForcibly();
+        }
+        Matcher matcher = JAVA_VERSION_OUTPUT.matcher(output);
+        if (!matcher.find()) {
+            throw new IOException("could not determine the Java version of " + binary
+                    + "; -version output: " + output.strip());
+        }
+        return new JavaInfo(Platform.CURRENT_PLATFORM, matcher.group(1), null);
+    }
+
     @Override
     public void stop(String instanceId) {
         LaunchContext context = launches.get(instanceId);
@@ -188,9 +424,21 @@ public final class RealHmclCoreAdapter implements HmclCoreAdapter {
         }
     }
 
+    private static void checkInstallCancelled() throws InstallCancelledException {
+        if (Thread.currentThread().isInterrupted()) {
+            throw new InstallCancelledException();
+        }
+    }
+
     private static final class LaunchCancelledException extends IOException {
         private LaunchCancelledException() {
             super("launch cancelled");
+        }
+    }
+
+    private static final class InstallCancelledException extends IOException {
+        private InstallCancelledException() {
+            super("install cancelled");
         }
     }
 
