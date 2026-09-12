@@ -35,6 +35,8 @@ repositories {
 def hmclCheckout = project.findProperty('hmclCheckout')
 def hmclVersionProperty = project.findProperty('hmclVersion')
 def hmclProfile = hmclCheckout != null || hmclVersionProperty != null
+def hmclCommit = project.findProperty('hmclCommit')
+        ?: (hmclCheckout != null ? project.findProperty('hmclPinnedCommit') : 'none')
 def hmclVersion = hmclVersionProperty ?: (hmclCheckout != null ? '3.0' : null)
 def hmclGroup = project.findProperty('hmclGroup') ?: (hmclCheckout != null ? 'org.jackhuang' : 'HMCL3')
 def hmclJavafxVersion = project.findProperty('hmclJavafxVersion') ?: '25'
@@ -45,6 +47,32 @@ def hmclJavafxClassifier = hmclProfile
 // Keep profile outputs separate so a previous HMCL build cannot leave stale
 // RealHmclCoreAdapter classes in a later dependency-free build.
 layout.buildDirectory.set(layout.projectDirectory.dir(hmclProfile ? 'build-hmcl' : 'build'))
+
+if (hmclCheckout != null) {
+    // A Git checkout can be verified exactly. GitHub source archives do not
+    // contain .git, so their reviewed revision is recorded but cannot be
+    // independently inferred here.
+    def checkoutDirectory = file(hmclCheckout)
+    if (new File(checkoutDirectory, '.git').exists()) {
+        def gitHead = providers.exec {
+            commandLine 'git', '-C', checkoutDirectory.absolutePath, 'rev-parse', 'HEAD'
+        }.standardOutput.asText.get().trim()
+        if (!gitHead.equalsIgnoreCase(hmclCommit.toString())) {
+            throw new GradleException(
+                    "HMCL checkout is ${gitHead}, expected pinned commit ${hmclCommit}")
+        }
+        def gitChanges = providers.exec {
+            commandLine 'git', '-C', checkoutDirectory.absolutePath,
+                    'status', '--porcelain', '--untracked-files=no'
+        }.standardOutput.asText.get().trim()
+        if (!gitChanges.isEmpty()
+                && !providers.gradleProperty('hmclAllowDirty').map { it.toBoolean() }.orElse(false).get()) {
+            throw new GradleException(
+                    'HMCL checkout has tracked changes; use a clean pinned checkout '
+                            + 'or explicitly pass -PhmclAllowDirty=true for local development')
+        }
+    }
+}
 
 if (hmclProfile) {
     // HMCL's current JavaFX runtime is compiled for Java 25.  Keep the
@@ -87,6 +115,21 @@ tasks.withType(JavaCompile).configureEach {
     options.release = 17
 }
 
+def helperBuildInfoDirectory = layout.buildDirectory.dir('generated/resources/helperBuildInfo')
+def generateHelperBuildInfo = tasks.register('generateHelperBuildInfo', WriteProperties) {
+    destinationFile.set(helperBuildInfoDirectory.map {
+        it.file('META-INF/mcmcl-helper.properties')
+    })
+    property 'protocolVersion', '1'
+    property 'helperVersion', project.version.toString()
+    property 'hmclProfile', hmclProfile.toString()
+    property 'hmclCommit', hmclCommit.toString()
+}
+sourceSets.main.resources.srcDir(helperBuildInfoDirectory)
+tasks.named('processResources') {
+    dependsOn generateHelperBuildInfo
+}
+
 tasks.register('protocolTest', JavaExec) {
     group = 'verification'
     description = 'Runs the dependency-free JSON Lines protocol tests.'
@@ -105,7 +148,13 @@ tasks.named('test') {
 
 tasks.named('jar') {
     manifest {
-        attributes('Main-Class': application.mainClass.get())
+        attributes(
+                'Main-Class': application.mainClass.get(),
+                'Implementation-Title': 'MCMCL HMCL Helper',
+                'Implementation-Version': project.version,
+                'MCMCL-Protocol-Version': '1',
+                'MCMCL-HMCL-Commit': hmclCommit
+        )
     }
 
     // The mod starts the helper with `java -jar`, so an HMCL profile must be
@@ -120,6 +169,16 @@ tasks.named('jar') {
             }
         })
     }
+}
+
+tasks.register('installHelper', Copy) {
+    group = 'distribution'
+    description = 'Builds and installs hmcl-helper.jar into the MCMCL runtime directory.'
+    dependsOn tasks.named('jar')
+    from(tasks.named('jar').flatMap { it.archiveFile })
+    into(project.findProperty('helperInstallDirectory')
+            ?: layout.projectDirectory.dir('../run/mcmcl'))
+    rename { 'hmcl-helper.jar' }
 }
 
 // A profile JAR contains HMCL Core classes, so carry the upstream GPL text

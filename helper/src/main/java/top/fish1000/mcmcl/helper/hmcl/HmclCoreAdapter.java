@@ -15,6 +15,11 @@ import java.util.List;
 public interface HmclCoreAdapter {
     List<InstanceDescriptor> listInstances() throws Exception;
 
+    /** Short stable identity reported during the protocol handshake. */
+    default String backendName() {
+        return "hmcl-core";
+    }
+
     /** Whether launch is currently backed by a real HMCL implementation. */
     default boolean isLaunchAvailable() {
         return true;

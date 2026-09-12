@@ -24,6 +24,11 @@ public final class UnavailableHmclCoreAdapter implements HmclCoreAdapter {
     }
 
     @Override
+    public String backendName() {
+        return "unavailable";
+    }
+
+    @Override
     public boolean isLaunchAvailable() {
         return false;
     }

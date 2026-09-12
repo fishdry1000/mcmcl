@@ -53,6 +53,7 @@ public final class RealHmclCoreAdapter implements HmclCoreAdapter {
                 result.add(new InstanceDescriptor(
                         instance.getId().toString(),
                         instance.getId().toString(),
+                        instance.getVersion().toString(),
                         instance.getInstanceRoot().toAbsolutePath().normalize(),
                         instance.getManifestFile().toAbsolutePath().normalize()));
             }

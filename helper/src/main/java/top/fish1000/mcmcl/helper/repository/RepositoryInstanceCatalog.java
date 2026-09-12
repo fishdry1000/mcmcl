@@ -45,7 +45,7 @@ public final class RepositoryInstanceCatalog {
 
         Path conventionalManifest = instanceRoot.resolve(instanceId + ".json");
         if (Files.isRegularFile(conventionalManifest)) {
-            return new InstanceDescriptor(instanceId, instanceId,
+            return new InstanceDescriptor(instanceId, instanceId, instanceId,
                     instanceRoot.toAbsolutePath().normalize(), conventionalManifest.toAbsolutePath().normalize());
         }
 
@@ -55,7 +55,7 @@ public final class RepositoryInstanceCatalog {
                     .filter(path -> path.getFileName().toString().toLowerCase().endsWith(".json"))
                     .toList();
             if (jsonFiles.size() == 1) {
-                return new InstanceDescriptor(instanceId, instanceId,
+                return new InstanceDescriptor(instanceId, instanceId, instanceId,
                         instanceRoot.toAbsolutePath().normalize(),
                         jsonFiles.get(0).toAbsolutePath().normalize());
             }

@@ -49,14 +49,20 @@ public final class InstanceManager {
     public static DiscoveryResult discover(Minecraft minecraft) throws IOException {
         ensureLayout(minecraft);
         try {
-            List<HmclInstance> instances = helper(minecraft)
+            HmclHelperClient helper = helper(minecraft);
+            List<HmclInstance> instances = helper
                     .listInstances()
                     .get(35, TimeUnit.SECONDS)
                     .stream()
                     .sorted(Comparator.comparing(HmclInstance::name, String.CASE_INSENSITIVE_ORDER))
                     .limit(Config.MAX_INSTANCES.get())
                     .toList();
-            return new DiscoveryResult(instances, List.of());
+            HmclHelperClient.HelperInfo info = helper.helperInfo();
+            List<String> problems = info != null && !info.launchAvailable()
+                    ? List.of("Helper " + info.helperVersion()
+                            + " is not built with the HMCL Core launch profile")
+                    : List.of();
+            return new DiscoveryResult(instances, problems);
         } catch (Exception exception) {
             Throwable cause = exception.getCause() == null ? exception : exception.getCause();
             if (cause instanceof IOException ioException) {

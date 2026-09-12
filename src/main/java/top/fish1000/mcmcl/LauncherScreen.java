@@ -2,7 +2,9 @@ package top.fish1000.mcmcl;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -18,6 +20,7 @@ public final class LauncherScreen extends Screen {
     private final Screen parent;
     private List<HmclInstance> instances = List.of();
     private final List<RowWidgets> rowWidgets = new ArrayList<>();
+    private final Set<String> stoppingInstances = new HashSet<>();
     private Component status = Component.translatable("screen.minecraftminecraftlauncher.loading");
     private boolean statusError;
     private String latestOutput = "";
@@ -136,6 +139,7 @@ public final class LauncherScreen extends Screen {
                                 result.problems().size()
                         );
                         statusError = true;
+                        latestOutput = result.problems().getFirst();
                     }
                     rebuildWidgets();
                 });
@@ -166,6 +170,7 @@ public final class LauncherScreen extends Screen {
     private void toggle(HmclInstance instance) {
         HmclHelperClient helper = InstanceManager.helper(minecraft);
         if (helper.isRunning(instance.id())) {
+            stoppingInstances.add(instance.id());
             helper.stop(instance.id());
             status = Component.translatable("screen.minecraftminecraftlauncher.stopping", instance.name());
             statusError = false;
@@ -173,6 +178,7 @@ public final class LauncherScreen extends Screen {
         }
 
         latestOutput = "";
+        stoppingInstances.remove(instance.id());
         status = Component.translatable("screen.minecraftminecraftlauncher.starting", instance.name());
         statusError = false;
         try {
@@ -181,15 +187,22 @@ public final class LauncherScreen extends Screen {
                     minecraft,
                     line -> minecraft.execute(() -> {
                         latestOutput = line;
-                        if (helper.isRunning(instance.id())) {
-                            status = Component.translatable("screen.minecraftminecraftlauncher.running", instance.name());
-                        }
                     })
             );
+            handle.started().whenComplete((ignored, error) -> minecraft.execute(() -> {
+                if (error == null
+                        && helper.isRunning(instance.id())
+                        && !stoppingInstances.contains(instance.id())) {
+                    status = Component.translatable("screen.minecraftminecraftlauncher.running", instance.name());
+                    statusError = false;
+                }
+            }));
             handle.exitCode().whenComplete((exitCode, error) -> minecraft.execute(() -> {
+                stoppingInstances.remove(instance.id());
                 if (error != null) {
                     status = Component.translatable("screen.minecraftminecraftlauncher.exit_error", instance.name());
                     statusError = true;
+                    latestOutput = failureMessage(error);
                 } else if (exitCode == 0) {
                     status = Component.translatable("screen.minecraftminecraftlauncher.exit_ok", instance.name());
                     statusError = false;
@@ -203,6 +216,7 @@ public final class LauncherScreen extends Screen {
                 }
             }));
         } catch (IOException | RuntimeException exception) {
+            stoppingInstances.remove(instance.id());
             status = Component.translatable("screen.minecraftminecraftlauncher.launch_failed");
             statusError = true;
             MinecraftMinecraftLauncher.LOGGER.warn("Could not launch MCMCL instance {}", instance.id(), exception);
@@ -211,13 +225,25 @@ public final class LauncherScreen extends Screen {
 
     private void updateRowButtons() {
         for (RowWidgets row : rowWidgets) {
-            boolean running = InstanceManager.helper(minecraft).isRunning(row.instance().id());
+            HmclHelperClient helper = InstanceManager.helper(minecraft);
+            boolean running = helper.isRunning(row.instance().id());
             row.button().setMessage(Component.translatable(
                     running
                             ? "screen.minecraftminecraftlauncher.stop"
                             : "screen.minecraftminecraftlauncher.launch"
             ));
+            HmclHelperClient.HelperInfo info = helper.helperInfo();
+            row.button().active = running || info == null || info.launchAvailable();
         }
+    }
+
+    private static String failureMessage(Throwable error) {
+        Throwable current = error;
+        while (current.getCause() != null) {
+            current = current.getCause();
+        }
+        String message = current.getMessage();
+        return message == null || message.isBlank() ? current.getClass().getSimpleName() : message;
     }
 
     private record RowWidgets(HmclInstance instance, Button button) {

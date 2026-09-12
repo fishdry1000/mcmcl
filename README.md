@@ -30,7 +30,18 @@ helper 的协议代码和 HMCL Core ABI 以 Java 17 为基线；默认协议构�
 
 HMCL Core 当前没有稳定的公开 Maven 坐标。真实 HMCL Core adapter 需要使用经过审查的 HMCL 源码 checkout，或先将同一 checkout 的 `HMCLCore` 发布到本机 Maven 仓库。具体流程见 [helper/README.md](helper/README.md)。
 
-将 helper JAR 放到当前 Minecraft 游戏目录的 `mcmcl/hmcl-helper.jar`，或者在 NeoForge 配置中修改 `hmclHelperJar`。HMCL 游戏仓库默认目录为：
+开发环境可用一个命令构建真实 profile 并安装到默认运行目录：
+
+```powershell
+./gradlew.bat -p helper `
+  "-PhmclCheckout=C:\src\HMCL" `
+  clean test installHelper
+```
+
+`installHelper` 默认写入 `run/mcmcl/hmcl-helper.jar`；可用
+`-PhelperInstallDirectory=<目录>` 覆盖。正式安装时将同一个 profile JAR 放到
+当前 Minecraft 游戏目录的 `mcmcl/hmcl-helper.jar`，或者在 NeoForge 配置中修改
+`hmclHelperJar`。HMCL 游戏仓库默认目录为：
 
 ```text
 <Minecraft 游戏目录>/mcmcl/hmcl/
@@ -55,12 +66,15 @@ java -jar mcmcl-hmcl-helper.jar --repository <HMCL 游戏仓库根目录>
 请求示例：
 
 ```json
+{"id":"0","command":"hello"}
 {"id":"1","command":"list"}
 {"id":"2","command":"launch","instanceId":"26.2","username":"Player","uuid":"00000000-0000-0000-0000-000000000000","accessToken":"...","userType":"msa"}
 {"id":"3","command":"stop","instanceId":"26.2"}
 ```
 
-启动请求的响应只表示请求已接受；`started`、`log`、`exit` 和 `error` 通过异步事件返回。协议的完整定义见 [helper/README.md](helper/README.md)。
+模组启动 helper 后会先用 `hello` 校验协议版本，并读取 helper 版本、HMCL 固定
+提交和启动能力。启动请求的响应只表示请求已接受；`started`、`log`、`exit` 和
+`error` 通过异步事件返回。协议的完整定义见 [helper/README.md](helper/README.md)。
 
 ## 设计边界
 
@@ -71,6 +85,9 @@ java -jar mcmcl-hmcl-helper.jar --repository <HMCL 游戏仓库根目录>
 - helper 运行时必须遵循 HMCL Core 的 GPL-3.0 条款；发布模组和 helper 前需要一并提供相应许可证与源码/对应源码材料。
 
 默认 helper JAR 只包含协议和仓库发现代码，不能启动游戏；发布或实际使用时必须使用固定 HMCL checkout 构建的 profile JAR。profile JAR 构建会把 checkout 中的 `LICENSE` 放入 `META-INF/licenses/HMCL-LICENSE.txt`，但这不替代对应的 HMCL 源码/对应源码材料。
+
+helper profile 包含当前操作系统/架构的 JavaFX 原生库，因此正式分发应按平台
+分别构建，并把 helper、锁定的 HMCL 提交及对应源码材料作为一组发布。
 
 ## 配置
 

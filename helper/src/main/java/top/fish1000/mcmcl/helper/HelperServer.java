@@ -90,6 +90,7 @@ public final class HelperServer {
             }
             String command = Json.requiredString(request, "command");
             switch (command) {
+                case "hello" -> hello(id);
                 case "list" -> list(id);
                 case "launch" -> launch(id, request);
                 case "stop" -> stop(id, request);
@@ -104,6 +105,20 @@ public final class HelperServer {
         } catch (Exception e) {
             respondError(id, CODE_INTERNAL_ERROR, safeMessage(e));
         }
+    }
+
+    private void hello(Object id) {
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("type", "response");
+        response.put("id", id);
+        response.put("ok", true);
+        response.put("protocolVersion", HelperBuildInfo.PROTOCOL_VERSION);
+        response.put("helperVersion", HelperBuildInfo.helperVersion());
+        response.put("backend", adapter.backendName());
+        response.put("launchAvailable", adapter.isLaunchAvailable());
+        response.put("hmclProfile", HelperBuildInfo.hmclProfile());
+        response.put("hmclCommit", HelperBuildInfo.hmclCommit());
+        output.write(response);
     }
 
     private void list(Object id) {

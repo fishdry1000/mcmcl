@@ -86,12 +86,21 @@ public final class ProtocolTest {
     private static void serverListsAndRejectsMalformedRequests() throws Exception {
         RecordingAdapter adapter = new RecordingAdapter();
         String input = "{\"id\":\"list-1\",\"command\":\"list\"}\n"
+                + "{\"id\":\"hello-1\",\"command\":\"hello\"}\n"
                 + "not-json\n"
                 + "{\"id\":\"bad-command\",\"command\":\"wat\"}\n"
                 + "{\"id\":\"stop-1\",\"command\":\"stop\",\"instanceId\":\"none\"}\n"
                 + "{\"id\":\"shutdown-1\",\"command\":\"shutdown\"}\n";
         List<Map<String, Object>> responses = run(adapter, input);
         check(hasResponse(responses, "list-1", true), "list response missing");
+        Map<String, Object> hello = findResponse(responses, "hello-1");
+        check(hello != null, "hello response missing");
+        check(hello.get("protocolVersion") instanceof Number protocolVersion
+                        && protocolVersion.intValue() == HelperBuildInfo.PROTOCOL_VERSION,
+                "hello response has the wrong protocol version");
+        check("hmcl-core".equals(hello.get("backend")), "hello response has the wrong backend");
+        check(Boolean.TRUE.equals(hello.get("launchAvailable")),
+                "hello response should report launch availability");
         check(hasResponse(responses, null, false), "malformed line should get a null-id error");
         check(hasResponse(responses, "bad-command", false), "unknown command should fail");
         check(hasResponse(responses, "stop-1", false), "unknown stop should fail");
@@ -316,6 +325,14 @@ public final class ProtocolTest {
                 && Boolean.valueOf(ok).equals(message.get("ok")));
     }
 
+    private static Map<String, Object> findResponse(List<Map<String, Object>> messages, Object id) {
+        return messages.stream()
+                .filter(message -> "response".equals(message.get("type"))
+                        && java.util.Objects.equals(id, message.get("id")))
+                .findFirst()
+                .orElse(null);
+    }
+
     private static boolean hasEvent(List<Map<String, Object>> messages, String instanceId, String event) {
         return messages.stream().anyMatch(message -> "event".equals(message.get("type"))
                 && instanceId.equals(message.get("instanceId"))
@@ -354,7 +371,7 @@ public final class ProtocolTest {
 
         @Override
         public List<InstanceDescriptor> listInstances() {
-            return List.of(new InstanceDescriptor("test-instance", "Test", Path.of("test-instance"),
+            return List.of(new InstanceDescriptor("test-instance", "Test", "1.0", Path.of("test-instance"),
                     Path.of("test-instance/test-instance.json")));
         }
 

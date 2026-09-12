@@ -5,11 +5,12 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /** Stable, protocol-facing subset of an HMCL game instance. */
-public record InstanceDescriptor(String instanceId, String name, Path root, Path manifest) {
+public record InstanceDescriptor(String instanceId, String name, String version, Path root, Path manifest) {
     public Map<String, Object> toJson() {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("instanceId", instanceId);
         result.put("name", name);
+        result.put("version", version);
         result.put("root", root.toString());
         result.put("manifest", manifest.toString());
         return result;

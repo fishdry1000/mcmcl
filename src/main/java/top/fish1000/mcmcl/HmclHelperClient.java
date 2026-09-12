@@ -34,6 +34,7 @@ import net.minecraft.client.User;
  * dependencies never enter the NeoForge class loader.</p>
  */
 public final class HmclHelperClient implements AutoCloseable {
+    private static final int PROTOCOL_VERSION = 1;
     private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(30);
 
     private final Path repositoryDirectory;
@@ -46,6 +47,8 @@ public final class HmclHelperClient implements AutoCloseable {
 
     private volatile Process process;
     private volatile BufferedWriter writer;
+    private volatile CompletableFuture<Void> ready;
+    private volatile HelperInfo helperInfo;
 
     public HmclHelperClient(Path repositoryDirectory, Path helperJar, Path workingDirectory) {
         this.repositoryDirectory = repositoryDirectory.toAbsolutePath().normalize();
@@ -72,7 +75,8 @@ public final class HmclHelperClient implements AutoCloseable {
         user.getClientId().ifPresent(value -> request.addProperty("clientId", value));
         user.getXuid().ifPresent(value -> request.addProperty("xuid", value));
 
-        LaunchHandle handle = new LaunchHandle(instance.id(), new CompletableFuture<>());
+        LaunchHandle handle = new LaunchHandle(
+                instance.id(), new CompletableFuture<>(), new CompletableFuture<>());
         registerLaunch(instance.id(), handle);
         if (logSink != null) {
             logSinks.put(instance.id(), logSink);
@@ -102,6 +106,10 @@ public final class HmclHelperClient implements AutoCloseable {
         return handle != null && !handle.exitCode().isDone();
     }
 
+    public HelperInfo helperInfo() {
+        return helperInfo;
+    }
+
     public void stop(String instanceId) {
         if (!isRunning(instanceId)) {
             return;
@@ -128,8 +136,14 @@ public final class HmclHelperClient implements AutoCloseable {
     }
 
     private CompletableFuture<JsonObject> send(JsonObject request) throws IOException {
-        ensureStarted();
-        return sendToProcess(request, null);
+        CompletableFuture<Void> readiness = ensureStarted();
+        return readiness.thenCompose(ignored -> {
+            try {
+                return sendToProcess(request, null);
+            } catch (IOException exception) {
+                return CompletableFuture.failedFuture(exception);
+            }
+        });
     }
 
     /** Sends on the current process, optionally requiring a specific process identity. */
@@ -176,10 +190,12 @@ public final class HmclHelperClient implements AutoCloseable {
         return response;
     }
 
-    private void ensureStarted() throws IOException {
+    private CompletableFuture<Void> ensureStarted() throws IOException {
+        Process startedProcess;
+        CompletableFuture<Void> readiness;
         synchronized (processLock) {
             if (process != null && process.isAlive()) {
-                return;
+                return ready;
             }
 
             Process staleProcess = process;
@@ -188,6 +204,8 @@ public final class HmclHelperClient implements AutoCloseable {
                 writer = null;
                 failPendingAndLaunches(new IOException(
                         "HMCL helper exited with code " + safeExitCode(staleProcess)));
+                ready = null;
+                helperInfo = null;
             }
 
             if (!Files.isRegularFile(helperJar)) {
@@ -205,9 +223,12 @@ public final class HmclHelperClient implements AutoCloseable {
                     repositoryDirectory.toString()
             );
             builder.directory(workingDirectory.toFile());
-            Process startedProcess = builder.start();
+            startedProcess = builder.start();
             process = startedProcess;
             writer = new BufferedWriter(new OutputStreamWriter(startedProcess.getOutputStream(), StandardCharsets.UTF_8));
+            readiness = new CompletableFuture<>();
+            ready = readiness;
+            helperInfo = null;
 
             // Bind each reader to the process it was created for.  Looking up
             // the volatile field inside the reader would let a delayed old
@@ -217,6 +238,34 @@ public final class HmclHelperClient implements AutoCloseable {
             Thread.ofVirtual().name("mcmcl-hmcl-helper-errors").start(
                     () -> readErrors(startedProcess));
         }
+
+        JsonObject hello = new JsonObject();
+        hello.addProperty("command", "hello");
+        try {
+            sendToProcess(hello, startedProcess).whenComplete((response, error) -> {
+                if (error != null) {
+                    readiness.completeExceptionally(error);
+                    return;
+                }
+                try {
+                    HelperInfo info = parseHello(response);
+                    synchronized (processLock) {
+                        if (process == startedProcess) {
+                            helperInfo = info;
+                        }
+                    }
+                    readiness.complete(null);
+                } catch (IOException exception) {
+                    readiness.completeExceptionally(exception);
+                    failConnection(startedProcess, exception);
+                    startedProcess.destroy();
+                }
+            });
+        } catch (IOException exception) {
+            readiness.completeExceptionally(exception);
+            throw exception;
+        }
+        return readiness;
     }
 
     private void readResponses(Process observedProcess) {
@@ -277,7 +326,12 @@ public final class HmclHelperClient implements AutoCloseable {
         String instanceId = string(event, "instanceId", "");
         String eventName = string(event, "event", "");
         Consumer<String> logSink = logSinks.get(instanceId);
-        if ("log".equals(eventName) && logSink != null) {
+        if ("started".equals(eventName)) {
+            LaunchHandle handle = runningInstances.get(instanceId);
+            if (handle != null) {
+                handle.started().complete(null);
+            }
+        } else if ("log".equals(eventName) && logSink != null) {
             logSink.accept(string(event, "line", ""));
         } else if ("error".equals(eventName)) {
             String message = string(event, "message", "HMCL helper reported an unknown error");
@@ -288,15 +342,38 @@ public final class HmclHelperClient implements AutoCloseable {
             LaunchHandle handle = runningInstances.remove(instanceId);
             logSinks.remove(instanceId);
             if (handle != null && !handle.exitCode().isDone()) {
-                handle.exitCode().completeExceptionally(new IOException(message));
+                IOException exception = new IOException(message);
+                handle.started().completeExceptionally(exception);
+                handle.exitCode().completeExceptionally(exception);
             }
         } else if ("exit".equals(eventName)) {
             LaunchHandle handle = runningInstances.remove(instanceId);
             logSinks.remove(instanceId);
             if (handle != null && !handle.exitCode().isDone()) {
-                handle.exitCode().complete(integer(event, "code", -1));
+                int exitCode = integer(event, "code", -1);
+                if (!handle.started().isDone()) {
+                    handle.started().completeExceptionally(
+                            new IOException("HMCL game process exited before reporting startup"));
+                }
+                handle.exitCode().complete(exitCode);
             }
         }
+    }
+
+    private HelperInfo parseHello(JsonObject response) throws IOException {
+        requireSuccess(response);
+        int protocolVersion = integer(response, "protocolVersion", -1);
+        if (protocolVersion != PROTOCOL_VERSION) {
+            throw new IOException("Incompatible HMCL helper protocol " + protocolVersion
+                    + "; this mod requires " + PROTOCOL_VERSION);
+        }
+        return new HelperInfo(
+                protocolVersion,
+                string(response, "helperVersion", "unknown"),
+                string(response, "backend", "unknown"),
+                bool(response, "launchAvailable", false),
+                string(response, "hmclCommit", "unknown")
+        );
     }
 
     private List<HmclInstance> parseInstances(JsonObject response) {
@@ -335,6 +412,7 @@ public final class HmclHelperClient implements AutoCloseable {
         LaunchHandle handle = runningInstances.remove(instanceId);
         logSinks.remove(instanceId);
         if (handle != null) {
+            handle.started().completeExceptionally(error);
             handle.exitCode().completeExceptionally(error);
         }
     }
@@ -347,15 +425,22 @@ public final class HmclHelperClient implements AutoCloseable {
             writer = null;
             process = null;
             failPendingAndLaunches(error);
+            ready = null;
+            helperInfo = null;
         }
     }
 
     private void failPendingAndLaunches(Throwable error) {
+        CompletableFuture<Void> readiness = ready;
+        if (readiness != null) {
+            readiness.completeExceptionally(error);
+        }
         for (CompletableFuture<JsonObject> request : pendingRequests.values()) {
             request.completeExceptionally(error);
         }
         pendingRequests.clear();
         for (LaunchHandle handle : runningInstances.values()) {
+            handle.started().completeExceptionally(error);
             handle.exitCode().completeExceptionally(error);
         }
         runningInstances.clear();
@@ -396,6 +481,11 @@ public final class HmclHelperClient implements AutoCloseable {
     private static int integer(JsonObject object, String key, int fallback) {
         JsonElement value = object.get(key);
         return value != null && value.isJsonPrimitive() ? value.getAsInt() : fallback;
+    }
+
+    private static boolean bool(JsonObject object, String key, boolean fallback) {
+        JsonElement value = object.get(key);
+        return value != null && value.isJsonPrimitive() ? value.getAsBoolean() : fallback;
     }
 
     private static Path currentJavaExecutable() {
@@ -443,6 +533,17 @@ public final class HmclHelperClient implements AutoCloseable {
         }
     }
 
-    public record LaunchHandle(String instanceId, CompletableFuture<Integer> exitCode) {
+    public record LaunchHandle(
+            String instanceId,
+            CompletableFuture<Void> started,
+            CompletableFuture<Integer> exitCode) {
+    }
+
+    public record HelperInfo(
+            int protocolVersion,
+            String helperVersion,
+            String backend,
+            boolean launchAvailable,
+            String hmclCommit) {
     }
 }

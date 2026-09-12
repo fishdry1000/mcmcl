@@ -34,19 +34,39 @@ profile JAR 会从指定 checkout 复制 `LICENSE` 到
 HMCL 固定提交，并按 GPL-3.0 提供对应源码或有效的源码获取方式；默认
 协议 JAR 不包含 HMCL Core，也不需要这份上游许可证。
 
+当前审查提交记录在 `helper/gradle.properties` 的 `hmclPinnedCommit` 中。若
+`hmclCheckout` 是 Git worktree，构建会校验其 HEAD；若使用不含 `.git` 的源码
+压缩包，构建会把该提交写入 JAR 元数据和握手响应，但发布者仍须自行确认压缩包
+确实来自该提交。可用 `-PhmclCommit=<commit>` 显式覆盖记录值。
+Git checkout 若有已跟踪文件改动，构建会拒绝继续；仅本地调试时可显式传入
+`-PhmclAllowDirty=true`，但这种产物不应发布。
+
+构建并安装到默认 NeoForge 开发运行目录可合并为一个命令：
+
+```powershell
+.\gradlew.bat -p helper `
+  "-PhmclCheckout=C:\src\HMCL" `
+  clean test installHelper
+```
+
+`installHelper` 写入 `../run/mcmcl/hmcl-helper.jar`，可用
+`-PhelperInstallDirectory=<目录>` 覆盖。profile JAR 包含当前平台的 JavaFX
+原生库，正式二进制应按操作系统和 CPU 架构分别构建、标记和发布。
+
 `--repository` 是包含 `versions/`、`libraries/` 和 `assets/` 的游戏仓库根目录；路径必须存在且为目录。也可以直接使用 Gradle 的 `run` 任务。
 
 真实 profile 使用 helper 启动 JVM 自己的 `JavaRuntime.getDefault()` 作为 Minecraft Java。协议代码和 HMCL Core ABI 以 Java 17 为基线；默认无依赖构建可用 JDK 17。当前 HMCL checkout 的 JavaFX 25 profile 需要 JDK 25 构建、测试和运行，这也与 Minecraft 26.2 一致。profile 构建输出放在 `helper/build-hmcl/`，默认无依赖构建仍放在 `helper/build/`。构建脚本默认选择 Windows x64 的 JavaFX 25；可用 `-PhmclJavafxVersion` 和 `-PhmclJavafxClassifier` 覆盖版本/平台。
 
 stdout 保证只输出协议 JSON；启动参数错误写入 stderr，helper 进程退出码为 2。正常 EOF 或 `shutdown` 的退出码为 0；游戏本身的退出码只通过 `exit` 事件传递。
 
-## JSON Lines 协议 v0
+## JSON Lines 协议 v1
 
 每行一个 JSON 值。请求必须是对象，并包含 JSON 标量 `id` 和 `command`。响应和异步事件都不会跨行，也不会把 access token 写入日志或响应。
 
 ### 请求
 
 ```json
+{"id":"h1","command":"hello"}
 {"id":"l1","command":"list"}
 {"id":"l2","command":"launch","instanceId":"26.2","username":"Player","uuid":"00000000-0000-0000-0000-000000000000","accessToken":"...","userType":"msa","xuid":"...","clientId":"..."}
 {"id":"s1","command":"stop","instanceId":"26.2"}
@@ -54,6 +74,16 @@ stdout 保证只输出协议 JSON；启动参数错误写入 stderr，helper 进
 ```
 
 `launch` 的必填字段是 `instanceId`、`username`、`uuid`、`accessToken`、`userType`；`xuid` 和 `clientId` 可选。`uuid` 必须是标准 UUID 字符串。当前协议不携带 `userProperties`，真正的 HMCL 适配器应在内部按账号类型构造对应的属性 JSON。
+
+模组在其他请求前自动发送 `hello`。它返回协议版本、helper 版本、后端名称、
+是否具备真实启动能力以及构建所对应的 HMCL 提交，例如：
+
+```json
+{"type":"response","id":"h1","ok":true,"protocolVersion":1,"helperVersion":"0.1.0","backend":"hmcl-core","launchAvailable":true,"hmclProfile":true,"hmclCommit":"df52bc6e81e2e1116c131483dfb9996fdb7b2b10"}
+```
+
+协议版本不兼容时，模组会关闭该 helper 并显示明确错误；默认无 HMCL profile 的
+JAR 会报告 `backend:"unavailable"` 和 `launchAvailable:false`。
 
 ### 响应
 
@@ -138,7 +168,11 @@ helper 的 `build.gradle` 只在传入 `hmclVersion` 或 `hmclCheckout` 时启�
 5. 保存 HMCL 的 `ManagedProcess`/任务句柄，在 `stop` 和 `shutdown` 中终止游戏进程；
 6. 给 helper 分发 HMCL Core 所需的 JavaFX runtime modules 和其传递依赖，并在发布前完成 GPL-3.0 合规审查。
 
-当前已验证真实 profile 能启动 headless helper、完成 `list`/`shutdown`，并通过动态 JVM fixture 验证 `DefaultLauncher` 的实际进程启动、stdout/stderr 转发和退出事件；尚未用完整 Minecraft 26.2 文件集实际拉起目标游戏窗口，因此版本下载、NeoForge 参数和真实游戏窗口仍需在带有完整 HMCL 仓库的环境中验收。
+当前已验证真实 profile 能启动 headless helper、完成 `hello`/`list`/`shutdown`，
+并通过动态 JVM fixture 验证 `DefaultLauncher` 的实际进程启动、stdout/stderr
+转发和退出事件；也已用完整 Minecraft 26.2 文件集创建目标 Minecraft 进程、
+转发真实日志并通过 `stop` 结束。缺失依赖下载、Java 自动选择和更多加载器实例
+仍需单独验收。
 
 ## 目录
 
