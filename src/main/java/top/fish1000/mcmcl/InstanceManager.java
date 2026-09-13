@@ -82,6 +82,49 @@ public final class InstanceManager {
     public static void openDirectory(Minecraft minecraft) throws IOException {
         Path directory = instancesDirectory(minecraft);
         ensureLayout(minecraft);
+        openInFileManager(directory);
+    }
+
+    /** The instance's own directory, preferring the helper-reported root over the conventional layout. */
+    public static Path instanceDirectory(Minecraft minecraft, HmclInstance instance) {
+        if (!instance.root().isBlank()) {
+            Path reported = Path.of(instance.root());
+            if (Files.isDirectory(reported)) {
+                return reported.toAbsolutePath().normalize();
+            }
+        }
+        return instancesDirectory(minecraft).resolve("versions").resolve(instance.id());
+    }
+
+    /** Opens the instance directory, creating it when missing so it can be edited. */
+    public static void openInstanceDirectory(Minecraft minecraft, HmclInstance instance) throws IOException {
+        Path directory = instanceDirectory(minecraft, instance);
+        Files.createDirectories(directory);
+        openInFileManager(directory);
+    }
+
+    /**
+     * Opens the mods folder of a modded instance: the instance-local
+     * {@code mods} directory when present (HMCL version isolation), otherwise
+     * the repository-wide one; when neither exists the instance-local one is
+     * created.
+     */
+    public static void openInstanceModsDirectory(Minecraft minecraft, HmclInstance instance) throws IOException {
+        Path instanceMods = instanceDirectory(minecraft, instance).resolve("mods");
+        if (Files.isDirectory(instanceMods)) {
+            openInFileManager(instanceMods);
+            return;
+        }
+        Path sharedMods = instancesDirectory(minecraft).resolve("mods");
+        if (Files.isDirectory(sharedMods)) {
+            openInFileManager(sharedMods);
+            return;
+        }
+        Files.createDirectories(instanceMods);
+        openInFileManager(instanceMods);
+    }
+
+    private static void openInFileManager(Path directory) throws IOException {
         String os = System.getProperty("os.name", "").toLowerCase();
         String[] command;
         if (os.contains("win")) {

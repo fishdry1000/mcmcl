@@ -83,15 +83,22 @@ public final class ProtocolTest {
         try {
             Path conventional = Files.createDirectories(repository.resolve("versions/1.26.2"));
             Files.writeString(conventional.resolve("1.26.2.json"), "{}", StandardCharsets.UTF_8);
+            Path modded = Files.createDirectories(repository.resolve("versions/fabric-demo"));
+            Files.writeString(modded.resolve("fabric-demo.json"), """
+                    {"libraries":[{"name":"net.fabricmc:fabric-loader:0.16.9"}]}
+                    """, StandardCharsets.UTF_8);
             Path fallback = Files.createDirectories(repository.resolve("versions/custom"));
             Files.writeString(fallback.resolve("profile.json"), "{}", StandardCharsets.UTF_8);
             Files.createDirectories(repository.resolve("versions/without-manifest"));
 
             List<InstanceDescriptor> instances = new top.fish1000.mcmcl.helper.repository.RepositoryInstanceCatalog(repository).list();
-            check(instances.size() == 2, "catalog should ignore directories without a manifest");
+            check(instances.size() == 3, "catalog should ignore directories without a manifest");
             check(instances.get(0).instanceId().equals("1.26.2"), "catalog should sort instance ids");
+            check(instances.get(0).loader().isEmpty(), "vanilla manifest should report no loader");
             check(instances.get(1).manifest().getFileName().toString().equals("profile.json"),
                     "catalog should support HMCL's single-json fallback");
+            check(instances.get(2).instanceId().equals("fabric-demo"), "catalog should sort instance ids");
+            check(instances.get(2).loader().equals("fabric"), "loader libraries should be detected");
         } finally {
             deleteTree(repository);
         }
@@ -941,8 +948,8 @@ public final class ProtocolTest {
 
         @Override
         public List<InstanceDescriptor> listInstances() {
-            return List.of(new InstanceDescriptor("test-instance", "Test", "1.0", Path.of("test-instance"),
-                    Path.of("test-instance/test-instance.json")));
+            return List.of(new InstanceDescriptor("test-instance", "Test", "1.0", "",
+                    Path.of("test-instance"), Path.of("test-instance/test-instance.json")));
         }
 
         @Override

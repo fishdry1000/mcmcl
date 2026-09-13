@@ -1,7 +1,11 @@
 package top.fish1000.mcmcl;
 
-/** A small UI-facing description of an instance discovered by the HMCL helper. */
-public record HmclInstance(String id, String name, String version) {
+/**
+ * A small UI-facing description of an instance discovered by the HMCL helper.
+ * {@code loader} is empty for vanilla instances; {@code root} is the helper-reported
+ * instance directory (empty when the helper did not provide one).
+ */
+public record HmclInstance(String id, String name, String version, String loader, String root) {
     public HmclInstance {
         if (id == null || id.isBlank()
                 || id.equals(".")
@@ -13,5 +17,12 @@ public record HmclInstance(String id, String name, String version) {
         }
         name = name == null || name.isBlank() ? id : name;
         version = version == null || version.isBlank() ? id : version;
+        loader = loader == null ? "" : loader;
+        root = root == null ? "" : root;
+    }
+
+    /** Whether the instance carries a mod loader, so a mods folder is meaningful. */
+    public boolean hasModLoader() {
+        return !loader.isBlank();
     }
 }

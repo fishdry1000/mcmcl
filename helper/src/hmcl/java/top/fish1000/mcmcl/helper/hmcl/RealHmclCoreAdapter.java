@@ -33,6 +33,7 @@ import org.jackhuang.hmcl.util.CacheRepository;
 import org.jackhuang.hmcl.util.platform.ManagedProcess;
 import org.jackhuang.hmcl.util.platform.Platform;
 import top.fish1000.mcmcl.helper.repository.InstanceDescriptor;
+import top.fish1000.mcmcl.helper.repository.ManifestLoaderProbe;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -115,12 +116,14 @@ public final class RealHmclCoreAdapter implements HmclCoreAdapter {
             }
             List<InstanceDescriptor> result = new ArrayList<>();
             for (GameInstance instance : repository.getSnapshot().getInstances()) {
+                Path manifestFile = instance.getManifestFile().toAbsolutePath().normalize();
                 result.add(new InstanceDescriptor(
                         instance.getId().toString(),
                         instance.getId().toString(),
                         instance.getVersion().toString(),
+                        ManifestLoaderProbe.detect(manifestFile),
                         instance.getInstanceRoot().toAbsolutePath().normalize(),
-                        instance.getManifestFile().toAbsolutePath().normalize()));
+                        manifestFile));
             }
             return result;
         }

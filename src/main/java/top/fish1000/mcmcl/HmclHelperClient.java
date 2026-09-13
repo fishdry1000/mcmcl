@@ -544,13 +544,17 @@ public final class HmclHelperClient implements AutoCloseable {
             }
             for (JsonElement element : array) {
                 JsonObject instance = element.getAsJsonObject();
-                String instanceId = string(instance, "instanceId", string(instance, "id", ""));
+                String instanceId = string(instance, "instanceId", "");
                 String name = string(instance, "name", instanceId);
                 String version = string(instance, "version", instanceId);
+                String loader = string(instance, "loader", "");
+                String root = string(instance, "root", "");
                 result.add(new HmclInstance(
                         instanceId,
                         name,
-                        version
+                        version,
+                        loader,
+                        root
                 ));
             }
             return List.copyOf(result);

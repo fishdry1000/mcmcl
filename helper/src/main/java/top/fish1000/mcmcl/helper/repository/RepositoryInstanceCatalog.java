@@ -45,8 +45,7 @@ public final class RepositoryInstanceCatalog {
 
         Path conventionalManifest = instanceRoot.resolve(instanceId + ".json");
         if (Files.isRegularFile(conventionalManifest)) {
-            return new InstanceDescriptor(instanceId, instanceId, instanceId,
-                    instanceRoot.toAbsolutePath().normalize(), conventionalManifest.toAbsolutePath().normalize());
+            return describe(instanceId, instanceRoot, conventionalManifest);
         }
 
         try (Stream<Path> files = Files.list(instanceRoot)) {
@@ -55,14 +54,18 @@ public final class RepositoryInstanceCatalog {
                     .filter(path -> path.getFileName().toString().toLowerCase().endsWith(".json"))
                     .toList();
             if (jsonFiles.size() == 1) {
-                return new InstanceDescriptor(instanceId, instanceId, instanceId,
-                        instanceRoot.toAbsolutePath().normalize(),
-                        jsonFiles.get(0).toAbsolutePath().normalize());
+                return describe(instanceId, instanceRoot, jsonFiles.get(0));
             }
         } catch (IOException ignored) {
             // A single unreadable instance should not make list fail for all
             // other instances.  HMCL itself also ignores un-loadable entries.
         }
         return null;
+    }
+
+    private InstanceDescriptor describe(String instanceId, Path instanceRoot, Path manifest) {
+        return new InstanceDescriptor(instanceId, instanceId, instanceId,
+                ManifestLoaderProbe.detect(manifest),
+                instanceRoot.toAbsolutePath().normalize(), manifest.toAbsolutePath().normalize());
     }
 }

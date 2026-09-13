@@ -109,10 +109,14 @@ HMCL Core 的任务进度与快照发布依赖 JavaFX。为了让 profile JAR �
 {
   "instanceId":"1.26.2",
   "name":"1.26.2",
+  "version":"1.26.2",
+  "loader":"",
   "root":"C:\\path\\to\\.minecraft\\versions\\1.26.2",
   "manifest":"C:\\path\\to\\.minecraft\\versions\\1.26.2\\1.26.2.json"
 }
 ```
+
+`loader` 是对 manifest 的只读嗅探结果（按 `libraries` 坐标识别 `fabric`/`quilt`/`neoforge`/`forge`/`optifine`/`liteloader`），原版实例为空字符串；嗅探失败不影响 `list`。
 
 `remoteVersions` 成功时增加 `versions` 数组（`id`/`type`/`releaseTime`）：
 
