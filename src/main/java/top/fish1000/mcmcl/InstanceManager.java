@@ -85,24 +85,12 @@ public final class InstanceManager {
         openInFileManager(directory);
     }
 
-    /** The instance's own directory, preferring the helper-reported root over the conventional layout. */
-    public static Path instanceDirectory(Minecraft minecraft, HmclInstance instance) {
-        if (!instance.root().isBlank()) {
-            Path reported = Path.of(instance.root());
-            if (Files.isDirectory(reported)) {
-                return reported.toAbsolutePath().normalize();
-            }
-        }
-        return instancesDirectory(minecraft).resolve("versions").resolve(instance.id());
-    }
-
-    /** Opens the instance directory, creating it when missing so it can be edited. */
-    public static void openInstanceDirectory(Minecraft minecraft, HmclInstance instance) throws IOException {
-        Path directory = instanceDirectory(minecraft, instance);
-        Files.createDirectories(directory);
-        openInFileManager(directory);
-    }
-
+    /**
+     * Opens the mods folder of a modded instance: the instance-local
+     * {@code mods} directory when present (HMCL version isolation), otherwise
+     * the repository-wide one; when neither exists the instance-local one is
+     * created.
+     */
     /**
      * Opens the mods folder of a modded instance: the instance-local
      * {@code mods} directory when present (HMCL version isolation), otherwise
@@ -110,7 +98,10 @@ public final class InstanceManager {
      * created.
      */
     public static void openInstanceModsDirectory(Minecraft minecraft, HmclInstance instance) throws IOException {
-        Path instanceMods = instanceDirectory(minecraft, instance).resolve("mods");
+        Path instanceRoot = instance.root().isBlank()
+                ? instancesDirectory(minecraft).resolve("versions").resolve(instance.id())
+                : Path.of(instance.root());
+        Path instanceMods = instanceRoot.toAbsolutePath().normalize().resolve("mods");
         if (Files.isDirectory(instanceMods)) {
             openInFileManager(instanceMods);
             return;

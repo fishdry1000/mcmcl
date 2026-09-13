@@ -116,7 +116,7 @@ HMCL Core 的任务进度与快照发布依赖 JavaFX。为了让 profile JAR �
 }
 ```
 
-`loader` 是对 manifest 的只读嗅探结果（按 `libraries` 坐标识别 `fabric`/`quilt`/`neoforge`/`forge`/`optifine`/`liteloader`），原版实例为空字符串；嗅探失败不影响 `list`。
+`loader` 是对 manifest 的只读嗅探结果：优先按 HMCL 的 `patches[].id` 识别组件（`fabric`/`forge`/`neoforge`/`quilt`/`optifine`/`liteloader`/`cleanroom`），没有 patches 时再按 `libraries` 坐标嗅探；原版实例为空字符串，嗅探失败不影响 `list`。
 
 `remoteVersions` 成功时增加 `versions` 数组（`id`/`type`/`releaseTime`）：
 

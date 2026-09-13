@@ -17,13 +17,18 @@ import java.util.Map;
  */
 public final class ManifestLoaderProbe {
     private static final long MAX_MANIFEST_BYTES = 8 * 1024 * 1024;
-    /** Marker substrings of library coordinates, in detection priority order. */
+    /** Loader component ids HMCL writes into the manifest's patches array. */
+    private static final List<String> PATCH_IDS = List.of(
+            "fabric", "forge", "neoforge", "quilt", "optifine", "liteloader", "cleanroom");
+    /** Marker substrings of library coordinates for manifests without patches, in priority order. */
     private static final List<String[]> LOADER_MARKERS = List.of(
             new String[]{"net.fabricmc:fabric-loader", "fabric"},
             new String[]{"org.quiltmc:quilt-loader", "quilt"},
+            new String[]{"net.neoforged.fancymodloader", "neoforge"},
             new String[]{"net.neoforged:neoforge", "neoforge"},
             new String[]{"net.minecraftforge:forge", "forge"},
             new String[]{"net.minecraftforge:minecraftforge", "forge"},
+            new String[]{"net.minecraftforge:fmlcore", "forge"},
             new String[]{"optifine:optifine", "optifine"},
             new String[]{"com.mumfrey:liteloader", "liteloader"}
     );
@@ -43,6 +48,20 @@ public final class ManifestLoaderProbe {
             Object parsed = Json.parse(Files.readString(manifest));
             if (!(parsed instanceof Map<?, ?> manifestObject)) {
                 return "";
+            }
+            // HMCL-installed instances record their components as patches
+            // (game/neoforge/...), which is the most precise signal.  The
+            // merged libraries of a NeoForge install notably do not contain
+            // a "net.neoforged:neoforge" coordinate at all.
+            Object patches = manifestObject.get("patches");
+            if (patches instanceof List<?> patchList) {
+                for (Object patch : patchList) {
+                    if (patch instanceof Map<?, ?> patchObject
+                            && patchObject.get("id") instanceof String patchId
+                            && PATCH_IDS.contains(patchId.toLowerCase())) {
+                        return patchId.toLowerCase();
+                    }
+                }
             }
             Object libraries = manifestObject.get("libraries");
             if (!(libraries instanceof List<?> libraryList)) {

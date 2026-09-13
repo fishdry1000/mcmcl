@@ -87,18 +87,24 @@ public final class ProtocolTest {
             Files.writeString(modded.resolve("fabric-demo.json"), """
                     {"libraries":[{"name":"net.fabricmc:fabric-loader:0.16.9"}]}
                     """, StandardCharsets.UTF_8);
+            Path patched = Files.createDirectories(repository.resolve("versions/patched-demo"));
+            Files.writeString(patched.resolve("patched-demo.json"), """
+                    {"patches":[{"id":"game"},{"id":"neoforge","inheritsFrom":"1.26.2"}]}
+                    """, StandardCharsets.UTF_8);
             Path fallback = Files.createDirectories(repository.resolve("versions/custom"));
             Files.writeString(fallback.resolve("profile.json"), "{}", StandardCharsets.UTF_8);
             Files.createDirectories(repository.resolve("versions/without-manifest"));
 
             List<InstanceDescriptor> instances = new top.fish1000.mcmcl.helper.repository.RepositoryInstanceCatalog(repository).list();
-            check(instances.size() == 3, "catalog should ignore directories without a manifest");
+            check(instances.size() == 4, "catalog should ignore directories without a manifest");
             check(instances.get(0).instanceId().equals("1.26.2"), "catalog should sort instance ids");
             check(instances.get(0).loader().isEmpty(), "vanilla manifest should report no loader");
             check(instances.get(1).manifest().getFileName().toString().equals("profile.json"),
                     "catalog should support HMCL's single-json fallback");
             check(instances.get(2).instanceId().equals("fabric-demo"), "catalog should sort instance ids");
             check(instances.get(2).loader().equals("fabric"), "loader libraries should be detected");
+            check(instances.get(3).instanceId().equals("patched-demo"), "catalog should sort instance ids");
+            check(instances.get(3).loader().equals("neoforge"), "HMCL patches should be detected as the loader");
         } finally {
             deleteTree(repository);
         }

@@ -312,17 +312,8 @@ public final class LauncherScreen extends Screen {
 
     private void editSelected() {
         HmclInstance instance = this.list.getSelectedInstance();
-        if (instance == null) {
-            return;
-        }
-        try {
-            InstanceManager.openInstanceDirectory(this.minecraft, instance);
-            this.status = Component.translatable("screen.minecraftminecraftlauncher.edit_opened", instance.name());
-            this.statusError = false;
-        } catch (IOException | RuntimeException exception) {
-            this.status = Component.translatable("screen.minecraftminecraftlauncher.edit_failed");
-            this.statusError = true;
-            MinecraftMinecraftLauncher.LOGGER.warn("Could not open directory of {}", instance.id(), exception);
+        if (instance != null) {
+            this.minecraft.setScreenAndShow(new InstanceEditScreen(this, instance));
         }
     }
 

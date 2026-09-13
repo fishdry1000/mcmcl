@@ -108,11 +108,13 @@ public final class HmclHelperClient implements AutoCloseable {
             user.getXuid().ifPresent(value -> request.addProperty("xuid", value));
         }
 
-        String javaPath = Config.JAVA_PATH.get();
+        InstanceSettingsStore.Settings overrides =
+                InstanceSettingsStore.read(this.repositoryDirectory, instance.id());
+        String javaPath = overrides.javaPath().isBlank() ? Config.JAVA_PATH.get() : overrides.javaPath();
         if (!javaPath.isBlank()) {
             request.addProperty("javaPath", javaPath);
         }
-        int maxMemory = Config.MAX_MEMORY.get();
+        int maxMemory = overrides.maxMemory() > 0 ? overrides.maxMemory() : Config.MAX_MEMORY.get();
         if (maxMemory > 0) {
             request.addProperty("maxMemory", maxMemory);
         }
