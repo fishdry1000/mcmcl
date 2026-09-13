@@ -45,6 +45,7 @@ public final class ProtocolTest {
 
     public static void main(String[] args) throws Exception {
         jsonRoundTripEscapesStrings();
+        jsonLineWriterAlwaysUsesUtf8();
         repositoryCatalogFindsConventionalAndFallbackManifests();
         defaultFactoryUsesUnavailableProviderWithoutProfile();
         serverListsAndRejectsMalformedRequests();
@@ -53,7 +54,7 @@ public final class ProtocolTest {
         serverCancelsRunningInstall();
         javaFxBootstrapProvisionsAndVerifies();
         mainParsesJavaFxArguments();
-        int testCount = 9;
+        int testCount = 10;
         if (Boolean.getBoolean("mcmcl.hmcl.profile")) {
             realHmclCoreLaunchesFixture();
             realHmclCoreInstallsRepairsAndLaunchesFixtureFromLocalServer();
@@ -76,6 +77,24 @@ public final class ProtocolTest {
         check(parsed instanceof Map<?, ?>, "round trip should produce an object");
         check("中文\nquote=\" slash=\\".equals(((Map<?, ?>) parsed).get("line")),
                 "escaped string did not round-trip");
+    }
+
+    private static void jsonLineWriterAlwaysUsesUtf8() throws Exception {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        // Simulate a Chinese Windows JVM whose original System.out was
+        // constructed with a non-UTF-8 platform charset.
+        try (PrintStream platformOutput = new PrintStream(
+                bytes, true, StandardCharsets.ISO_8859_1)) {
+            new JsonLineWriter(platformOutput).write(Map.of(
+                    "instanceId", "中文实例",
+                    "line", "中文日志"));
+        }
+
+        Map<String, Object> message = cast(Json.parse(bytes.toString(StandardCharsets.UTF_8).strip()));
+        check("中文实例".equals(message.get("instanceId")),
+                "instance name was not encoded as UTF-8");
+        check("中文日志".equals(message.get("line")),
+                "log line was not encoded as UTF-8");
     }
 
     private static void repositoryCatalogFindsConventionalAndFallbackManifests() throws Exception {
