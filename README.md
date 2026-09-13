@@ -33,19 +33,26 @@ Minecraft Minecraft Launcher 是一款运行在 Minecraft 26.2 里的启动器 N
 
 ## 从源码构建
 
-### 拉取 HMCL 源代码
+需要 JDK 25。Helper 依赖项目固定版本的 HMCL 源码，构建前请先拉取并切换到对应提交。
 
-```bash
-git clone https://github.com/HMCL-dev/HMCL
+### PowerShell（Windows）
+
+```powershell
+git clone https://github.com/HMCL-dev/HMCL.git ..\HMCL
+git -C ..\HMCL checkout df52bc6e81e2e1116c131483dfb9996fdb7b2b10
+
+.\gradlew.bat -p helper "-PhmclCheckout=$((Resolve-Path '..\HMCL').Path)" clean test installHelper
+.\gradlew.bat build
 ```
 
-### 构建项目
-
-需要 JDK 25：
+### Bash（Linux/macOS）
 
 ```bash
-gradlew -p helper "-PhmclCheckout=<HMCL 源码目录>" clean test installHelper
-gradlew build
+git clone https://github.com/HMCL-dev/HMCL.git ../HMCL
+git -C ../HMCL checkout df52bc6e81e2e1116c131483dfb9996fdb7b2b10
+
+./gradlew -p helper "-PhmclCheckout=$(cd ../HMCL && pwd)" clean test installHelper
+./gradlew build
 ```
 
 ## 许可证
