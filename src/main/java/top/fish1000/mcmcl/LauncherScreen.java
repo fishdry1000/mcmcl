@@ -313,7 +313,7 @@ public final class LauncherScreen extends Screen {
     private void editSelected() {
         HmclInstance instance = this.list.getSelectedInstance();
         if (instance != null) {
-            this.minecraft.setScreenAndShow(new InstanceEditScreen(this, instance));
+            this.minecraft.setScreenAndShow(new InstanceEditScreen(this, instance, this::reloadInstances));
         }
     }
 

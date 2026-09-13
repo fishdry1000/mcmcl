@@ -7,18 +7,23 @@ package top.fish1000.mcmcl;
  */
 public record HmclInstance(String id, String name, String version, String loader, String root) {
     public HmclInstance {
-        if (id == null || id.isBlank()
-                || id.equals(".")
-                || id.equals("..")
-                || id.contains("/")
-                || id.contains("\\")
-                || id.indexOf('\u0000') >= 0) {
+        if (!isSafeId(id)) {
             throw new IllegalArgumentException("HMCL instance id must be a safe path segment");
         }
         name = name == null || name.isBlank() ? id : name;
         version = version == null || version.isBlank() ? id : version;
         loader = loader == null ? "" : loader;
         root = root == null ? "" : root;
+    }
+
+    /** Whether the id is a non-blank path segment the repository layout can use as a directory name. */
+    public static boolean isSafeId(String id) {
+        return id != null && !id.isBlank()
+                && !id.equals(".")
+                && !id.equals("..")
+                && !id.contains("/")
+                && !id.contains("\\")
+                && id.indexOf('\u0000') < 0;
     }
 
     /** Whether the instance carries a mod loader, so a mods folder is meaningful. */

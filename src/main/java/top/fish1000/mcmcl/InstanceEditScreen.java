@@ -1,5 +1,7 @@
 package top.fish1000.mcmcl;
 
+import java.io.IOException;
+
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.StringWidget;
@@ -10,9 +12,10 @@ import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.network.chat.Component;
 
 /**
- * Per-instance launch settings, mirroring the vanilla settings screen
- * structure: labelled fields between the header and the save/cancel footer.
- * Blank values fall back to the global client configuration at launch time.
+ * Per-instance settings editor: rename plus launch overrides, mirroring the
+ * vanilla settings screen structure with labelled fields between the header
+ * and the save/cancel footer.  Blank launch values fall back to the global
+ * client configuration at launch time.
  */
 public final class InstanceEditScreen extends Screen {
     private static final int FOOTER_HEIGHT = 74;
@@ -24,15 +27,20 @@ public final class InstanceEditScreen extends Screen {
 
     private final Screen parent;
     private final HmclInstance instance;
+    /** Invoked after a rename so the caller can refresh its instance list. */
+    private final Runnable onChanged;
     private final HeaderAndFooterLayout layout = new HeaderAndFooterLayout(this, 33, FOOTER_HEIGHT);
+    private EditBox idBox;
     private EditBox javaPathBox;
     private EditBox maxMemoryBox;
+    private StringWidget statusWidget;
     private boolean valuesLoaded;
 
-    public InstanceEditScreen(Screen parent, HmclInstance instance) {
+    public InstanceEditScreen(Screen parent, HmclInstance instance, Runnable onChanged) {
         super(Component.translatable("screen.minecraftminecraftlauncher.edit.title", instance.name()));
         this.parent = parent;
         this.instance = instance;
+        this.onChanged = onChanged;
     }
 
     @Override
@@ -42,6 +50,14 @@ public final class InstanceEditScreen extends Screen {
 
         LinearLayout fields = this.layout.addToContents(LinearLayout.vertical().spacing(4));
         fields.defaultCellSetting().alignHorizontallyLeft();
+
+        LinearLayout idGroup = fields.addChild(LinearLayout.vertical().spacing(2));
+        idGroup.addChild(new StringWidget(Component.translatable("screen.minecraftminecraftlauncher.edit.id"), this.font));
+        this.idBox = idGroup.addChild(new EditBox(
+                this.font, 0, 0, FIELD_WIDTH, 20, this.idBox,
+                Component.translatable("screen.minecraftminecraftlauncher.edit.id")));
+        this.idBox.setMaxLength(64);
+
         LinearLayout javaGroup = fields.addChild(LinearLayout.vertical().spacing(2));
         javaGroup.addChild(new StringWidget(Component.translatable("screen.minecraftminecraftlauncher.edit.java_path"), this.font));
         this.javaPathBox = javaGroup.addChild(new EditBox(
@@ -59,6 +75,8 @@ public final class InstanceEditScreen extends Screen {
         this.maxMemoryBox.setHint(Component.translatable("screen.minecraftminecraftlauncher.edit.global_hint"));
         this.maxMemoryBox.setTextColor(0xFFFFFFFF);
         this.maxMemoryBox.setResponder(value -> this.maxMemoryBox.setTextColor(0xFFFFFFFF));
+
+        this.statusWidget = fields.addChild(new StringWidget(Component.empty(), this.font));
 
         if (!this.valuesLoaded) {
             this.valuesLoaded = true;
@@ -97,28 +115,71 @@ public final class InstanceEditScreen extends Screen {
     }
 
     private void save() {
-        int maxMemory = 0;
-        String memoryText = this.maxMemoryBox.getValue().strip();
-        if (!memoryText.isEmpty()) {
-            try {
-                maxMemory = Integer.parseInt(memoryText);
-            } catch (NumberFormatException ignored) {
-                this.maxMemoryBox.setTextColor(ERROR_COLOR);
+        int maxMemory = parseMemory();
+        if (maxMemory < 0) {
+            return;
+        }
+        String newId = this.idBox.getValue().strip();
+        boolean renamed = false;
+        if (!newId.equals(this.instance.id())) {
+            if (newId.isEmpty()) {
+                this.showStatus(Component.translatable("screen.minecraftminecraftlauncher.edit.rename_empty"));
                 return;
             }
-            if (maxMemory < 0) {
-                this.maxMemoryBox.setTextColor(ERROR_COLOR);
+            if (!HmclInstance.isSafeId(newId)) {
+                this.showStatus(Component.translatable("screen.minecraftminecraftlauncher.edit.rename_invalid"));
+                return;
+            }
+            if (InstanceManager.helper(this.minecraft).isRunning(this.instance.id())) {
+                this.showStatus(Component.translatable("screen.minecraftminecraftlauncher.edit.rename_running"));
+                return;
+            }
+            if (InstanceManager.instanceExists(this.minecraft, newId)) {
+                this.showStatus(Component.translatable("screen.minecraftminecraftlauncher.edit.rename_exists"));
+                return;
+            }
+            try {
+                InstanceManager.renameInstance(this.minecraft, this.instance, newId);
+                renamed = true;
+            } catch (IOException exception) {
+                // Races (instances appearing mid-edit) surface the raw reason;
+                // every common case was already covered above.
+                this.showStatus(Component.literal(exception.getMessage() == null
+                        ? "Rename failed"
+                        : exception.getMessage()));
                 return;
             }
         }
-        boolean saved = InstanceSettingsStore.write(
+        InstanceSettingsStore.write(
                 InstanceManager.instancesDirectory(this.minecraft),
-                this.instance.id(),
+                newId,
                 new InstanceSettingsStore.Settings(this.javaPathBox.getValue().strip(), maxMemory)
         );
-        if (saved) {
-            this.minecraft.setScreenAndShow(this.parent);
+        if (renamed && this.onChanged != null) {
+            this.onChanged.run();
         }
+        this.minecraft.setScreenAndShow(this.parent);
+    }
+
+    /** Returns the parsed memory override, or -1 (after flagging the box red) when invalid. */
+    private int parseMemory() {
+        String memoryText = this.maxMemoryBox.getValue().strip();
+        if (memoryText.isEmpty()) {
+            return 0;
+        }
+        try {
+            int maxMemory = Integer.parseInt(memoryText);
+            if (maxMemory >= 0) {
+                return maxMemory;
+            }
+        } catch (NumberFormatException ignored) {
+        }
+        this.maxMemoryBox.setTextColor(ERROR_COLOR);
+        return -1;
+    }
+
+    private void showStatus(Component message) {
+        this.statusWidget.setMessage(message.copy().withColor(ERROR_COLOR));
     }
 
     @Override

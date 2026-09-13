@@ -4,11 +4,16 @@ import java.awt.Desktop;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Stream;
+
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 
 import net.minecraft.client.Minecraft;
 
@@ -85,12 +90,97 @@ public final class InstanceManager {
         openInFileManager(directory);
     }
 
+    /** Whether a version directory with this id exists in the repository. */
+    public static boolean instanceExists(Minecraft minecraft, String instanceId) {
+        return Files.isDirectory(instancesDirectory(minecraft).resolve("versions").resolve(instanceId));
+    }
+
     /**
-     * Opens the mods folder of a modded instance: the instance-local
-     * {@code mods} directory when present (HMCL version isolation), otherwise
-     * the repository-wide one; when neither exists the instance-local one is
-     * created.
+     * Renames an instance: moves {@code versions/<oldId>} to
+     * {@code versions/<newId>}, renames the conventional manifest file, fixes
+     * the manifest's {@code id}/{@code jar} fields and migrates the stored
+     * per-instance settings.  Case-only renames go through a temporary name
+     * because Windows treats the paths as identical.
      */
+    public static void renameInstance(Minecraft minecraft, HmclInstance instance, String newId) throws IOException {
+        if (!HmclInstance.isSafeId(newId)) {
+            throw new IOException("New instance id is not a safe path segment: " + newId);
+        }
+        if (newId.equals(instance.id())) {
+            return;
+        }
+        if (helper(minecraft).isRunning(instance.id())) {
+            throw new IOException("Instance is still running: " + instance.id());
+        }
+        Path versions = instancesDirectory(minecraft).resolve("versions");
+        Path oldDir = versions.resolve(instance.id());
+        Path newDir = versions.resolve(newId);
+        boolean caseOnly = newId.equalsIgnoreCase(instance.id());
+        if (Files.exists(newDir) && !caseOnly) {
+            throw new IOException("Instance already exists: " + newId);
+        }
+        if (!Files.isDirectory(oldDir)) {
+            throw new IOException("Instance directory is missing: " + oldDir);
+        }
+        Path manifest = findManifest(oldDir, instance.id());
+
+        if (caseOnly) {
+            Path temp = versions.resolve(instance.id() + ".mcmcl-renaming");
+            Files.move(oldDir, temp);
+            oldDir = temp;
+        }
+        Files.move(oldDir, newDir);
+        try {
+            if (manifest != null) {
+                Path movedManifest = newDir.resolve(manifest.getFileName());
+                Path targetManifest = manifest.getFileName().toString().equals(instance.id() + ".json")
+                        ? newDir.resolve(newId + ".json")
+                        : movedManifest;
+                if (targetManifest != movedManifest) {
+                    Files.move(movedManifest, targetManifest);
+                }
+                rewriteManifestIdentity(targetManifest, instance.id(), newId);
+            }
+            InstanceSettingsStore.rename(instancesDirectory(minecraft), instance.id(), newId);
+        } catch (IOException exception) {
+            // Best effort rollback so the instance stays discoverable.
+            Files.move(newDir, oldDir);
+            throw exception;
+        }
+    }
+
+    private static Path findManifest(Path instanceDir, String instanceId) throws IOException {
+        Path conventional = instanceDir.resolve(instanceId + ".json");
+        if (Files.isRegularFile(conventional)) {
+            return conventional;
+        }
+        try (Stream<Path> files = Files.list(instanceDir)) {
+            List<Path> jsonFiles = files
+                    .filter(Files::isRegularFile)
+                    .filter(path -> path.getFileName().toString().toLowerCase().endsWith(".json"))
+                    .toList();
+            return jsonFiles.size() == 1 ? jsonFiles.get(0) : null;
+        }
+    }
+
+    private static void rewriteManifestIdentity(Path manifest, String oldId, String newId) throws IOException {
+        JsonObject root = JsonParser.parseString(Files.readString(manifest)).getAsJsonObject();
+        boolean changed = false;
+        if (root.has("id") && oldId.equals(root.get("id").getAsString())) {
+            root.addProperty("id", newId);
+            changed = true;
+        }
+        if (root.has("jar") && oldId.equals(root.get("jar").getAsString())) {
+            root.addProperty("jar", newId);
+            changed = true;
+        }
+        if (changed) {
+            Path temp = manifest.resolveSibling(manifest.getFileName() + ".tmp");
+            Files.writeString(temp, root.toString());
+            Files.move(temp, manifest, StandardCopyOption.REPLACE_EXISTING);
+        }
+    }
+
     /**
      * Opens the mods folder of a modded instance: the instance-local
      * {@code mods} directory when present (HMCL version isolation), otherwise

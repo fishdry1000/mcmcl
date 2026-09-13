@@ -90,4 +90,26 @@ public final class InstanceSettingsStore {
     private static Path settingsFile(Path repository) {
         return repository.resolve("cache").resolve("instance-settings.json");
     }
+
+    /** Moves a stored settings entry when its instance is renamed; best effort. */
+    public static void rename(Path repository, String fromId, String toId) {
+        synchronized (LOCK) {
+            try {
+                Path file = settingsFile(repository);
+                if (!Files.isRegularFile(file)) {
+                    return;
+                }
+                JsonObject root = JsonParser.parseString(Files.readString(file)).getAsJsonObject();
+                JsonElement moved = root.remove(fromId);
+                if (moved == null) {
+                    return;
+                }
+                root.add(toId, moved);
+                Path temp = file.resolveSibling(file.getFileName() + ".tmp");
+                Files.writeString(temp, root.toString());
+                Files.move(temp, file, StandardCopyOption.REPLACE_EXISTING);
+            } catch (IOException | RuntimeException ignored) {
+            }
+        }
+    }
 }
