@@ -31,7 +31,7 @@ import net.minecraft.util.Util;
  * and a version/running-status line, plus a text filter and a loading entry.
  */
 public final class InstanceSelectionList extends ObjectSelectionList<InstanceSelectionList.Entry> {
-    private static final Identifier UNKNOWN_ICON = Identifier.withDefaultNamespace("textures/misc/unknown_server.png");
+    private static final String ICON_PATH_PREFIX = "textures/gui/version/";
     private static final Identifier JOIN_SPRITE = Identifier.withDefaultNamespace("world_list/join");
     private static final Identifier JOIN_HIGHLIGHTED_SPRITE = Identifier.withDefaultNamespace("world_list/join_highlighted");
     private static final int ICON_SIZE = 32;
@@ -169,6 +169,13 @@ public final class InstanceSelectionList extends ObjectSelectionList<InstanceSel
         return relX >= 0 && relX < ICON_SIZE && relY >= 0 && relY < ICON_SIZE;
     }
 
+    private static Identifier defaultIcon(HmclInstance instance) {
+        return Identifier.fromNamespaceAndPath(
+                MinecraftMinecraftLauncher.MODID,
+                ICON_PATH_PREFIX + instance.defaultIconName() + ".png"
+        );
+    }
+
     public abstract static class Entry extends ObjectSelectionList.Entry<InstanceSelectionList.Entry> {
     }
 
@@ -289,7 +296,7 @@ public final class InstanceSelectionList extends ObjectSelectionList<InstanceSel
 
             graphics.blit(
                     RenderPipelines.GUI_TEXTURED,
-                    UNKNOWN_ICON,
+                    defaultIcon(this.instance),
                     this.getContentX(),
                     this.getContentY(),
                     0.0F,

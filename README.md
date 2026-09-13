@@ -68,4 +68,4 @@ gradlew.bat build
 
 ## 许可证
 
-本项目以 [GPL-3.0](LICENSE) 许可证发布，与内置启动后端所依赖的 [HMCL](https://github.com/HMCL-dev/HMCL) 保持一致。安装界面的版本图标取自 HMCL（`assets/minecraftminecraftlauncher/textures/gui/version/`），同样遵循 GPL-3.0。
+本项目以 [GPL-3.0](LICENSE) 许可证发布，与内置启动后端所依赖的 [HMCL](https://github.com/HMCL-dev/HMCL) 保持一致。安装和实例列表使用的默认版本图标取自 HMCL（`assets/minecraftminecraftlauncher/textures/gui/version/`），同样遵循 GPL-3.0。
