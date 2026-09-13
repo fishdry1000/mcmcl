@@ -3,6 +3,7 @@ package top.fish1000.mcmcl;
 import java.io.IOException;
 
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.CycleButton;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.StringWidget;
 import net.minecraft.client.gui.layouts.HeaderAndFooterLayout;
@@ -33,6 +34,8 @@ public final class InstanceEditScreen extends Screen {
     private EditBox idBox;
     private EditBox javaPathBox;
     private EditBox maxMemoryBox;
+    private InstanceSettingsStore.VersionIsolationOverride versionIsolation =
+            InstanceSettingsStore.VersionIsolationOverride.INHERIT;
     private StringWidget statusWidget;
     private boolean valuesLoaded;
 
@@ -45,6 +48,14 @@ public final class InstanceEditScreen extends Screen {
 
     @Override
     protected void init() {
+        InstanceSettingsStore.Settings stored = null;
+        if (!this.valuesLoaded) {
+            this.valuesLoaded = true;
+            stored = InstanceSettingsStore.read(
+                    InstanceManager.instancesDirectory(this.minecraft), this.instance.id());
+            this.versionIsolation = stored.versionIsolation();
+        }
+
         this.layout.removeChildren();
         this.layout.addTitleHeader(this.title, this.font);
 
@@ -76,12 +87,22 @@ public final class InstanceEditScreen extends Screen {
         this.maxMemoryBox.setTextColor(0xFFFFFFFF);
         this.maxMemoryBox.setResponder(value -> this.maxMemoryBox.setTextColor(0xFFFFFFFF));
 
+        fields.addChild(
+                CycleButton.builder(InstanceEditScreen::isolationLabel, this.versionIsolation)
+                        .withValues(InstanceSettingsStore.VersionIsolationOverride.values())
+                        .create(
+                                0,
+                                0,
+                                FIELD_WIDTH,
+                                20,
+                                Component.translatable("screen.minecraftminecraftlauncher.edit.version_isolation"),
+                                (button, value) -> this.versionIsolation = value
+                        )
+        );
+
         this.statusWidget = fields.addChild(new StringWidget(Component.empty(), this.font));
 
-        if (!this.valuesLoaded) {
-            this.valuesLoaded = true;
-            InstanceSettingsStore.Settings stored = InstanceSettingsStore.read(
-                    InstanceManager.instancesDirectory(this.minecraft), this.instance.id());
+        if (stored != null) {
             this.javaPathBox.setValue(stored.javaPath());
             if (stored.maxMemory() > 0) {
                 this.maxMemoryBox.setValue(String.valueOf(stored.maxMemory()));
@@ -153,7 +174,8 @@ public final class InstanceEditScreen extends Screen {
         InstanceSettingsStore.write(
                 InstanceManager.instancesDirectory(this.minecraft),
                 newId,
-                new InstanceSettingsStore.Settings(this.javaPathBox.getValue().strip(), maxMemory)
+                new InstanceSettingsStore.Settings(
+                        this.javaPathBox.getValue().strip(), maxMemory, this.versionIsolation)
         );
         if (renamed && this.onChanged != null) {
             this.onChanged.run();
@@ -180,6 +202,15 @@ public final class InstanceEditScreen extends Screen {
 
     private void showStatus(Component message) {
         this.statusWidget.setMessage(message.copy().withColor(ERROR_COLOR));
+    }
+
+    private static Component isolationLabel(InstanceSettingsStore.VersionIsolationOverride value) {
+        String suffix = switch (value) {
+            case INHERIT -> "inherit";
+            case ENABLED -> "enabled";
+            case DISABLED -> "disabled";
+        };
+        return Component.translatable("screen.minecraftminecraftlauncher.edit.version_isolation." + suffix);
     }
 
     @Override

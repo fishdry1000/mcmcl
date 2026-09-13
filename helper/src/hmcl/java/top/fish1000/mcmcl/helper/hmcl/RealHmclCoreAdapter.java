@@ -224,6 +224,9 @@ public final class RealHmclCoreAdapter implements HmclCoreAdapter {
                         + " as instance " + request.instanceId() + " ...");
                 GameBuilder builder = dependencyManager.newGameBuilder(id);
                 try {
+                    if (request.versionIsolation()) {
+                        builder.enableIsolation();
+                    }
                     builder.component(GameComponentType.GAME, request.gameVersion());
                     for (HmclInstallRequest.ComponentSpec loader : request.loaders()) {
                         GameComponentType type = GameComponentType.fromPatchId(loader.type());
@@ -330,13 +333,17 @@ public final class RealHmclCoreAdapter implements HmclCoreAdapter {
         try {
             checkCancelled(context);
             GameInstanceID id = new GameInstanceID(instanceId);
-            GameInstance instance;
+            HeadlessGameInstance instance;
             synchronized (repositoryLock) {
                 checkCancelled(context);
                 repository.refresh();
                 checkCancelled(context);
-                instance = repository.getInstance(id);
+                instance = (HeadlessGameInstance) repository.getInstance(id);
             }
+            if (request.versionIsolation()) {
+                instance = instance.withRunDirectory(instance.getInstanceRoot());
+            }
+            Files.createDirectories(instance.getRunDirectory());
 
             // Keep the same launch-time normalization step used by HMCL's GUI
             // launcher.  The repository still owns inheritance resolution; Core
@@ -348,7 +355,9 @@ public final class RealHmclCoreAdapter implements HmclCoreAdapter {
 
             LaunchOptions.Builder optionsBuilder = new LaunchOptions.Builder()
                     .setInstanceId(id)
-                    .setGameDir(instance.getRunDirectory())
+                    // HMCL keeps the repository root here even when the instance
+                    // itself uses an isolated run directory.
+                    .setGameDir(repositoryRoot)
                     .setJava(java)
                     .setVersionName(id.toString())
                     .setProfileName("MCMCL")
@@ -615,12 +624,34 @@ public final class RealHmclCoreAdapter implements HmclCoreAdapter {
     }
 
     private static final class HeadlessGameInstance extends DefaultGameInstance {
+        private final Path runDirectory;
+
         private HeadlessGameInstance(
                 DefaultGameRepositorySnapshot snapshot,
                 GameInstanceID id,
                 GameInstanceManifest manifest,
                 Path manifestFile) {
+            this(snapshot, id, manifest, manifestFile, null);
+        }
+
+        private HeadlessGameInstance(
+                DefaultGameRepositorySnapshot snapshot,
+                GameInstanceID id,
+                GameInstanceManifest manifest,
+                Path manifestFile,
+                Path runDirectory) {
             super(snapshot, id, manifest, manifestFile);
+            this.runDirectory = runDirectory;
+        }
+
+        private HeadlessGameInstance withRunDirectory(Path runDirectory) {
+            return new HeadlessGameInstance(snapshot, id, manifest, manifestFile,
+                    runDirectory.toAbsolutePath().normalize());
+        }
+
+        @Override
+        public Path getRunDirectory() {
+            return runDirectory != null ? runDirectory : super.getRunDirectory();
         }
 
         @Override

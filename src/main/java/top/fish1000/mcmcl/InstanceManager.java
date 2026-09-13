@@ -182,27 +182,22 @@ public final class InstanceManager {
     }
 
     /**
-     * Opens the mods folder of a modded instance: the instance-local
-     * {@code mods} directory when present (HMCL version isolation), otherwise
-     * the repository-wide one; when neither exists the instance-local one is
-     * created.
+     * Opens the mods folder selected by the instance's effective version
+     * isolation setting.
      */
     public static void openInstanceModsDirectory(Minecraft minecraft, HmclInstance instance) throws IOException {
         Path instanceRoot = instance.root().isBlank()
                 ? instancesDirectory(minecraft).resolve("versions").resolve(instance.id())
                 : Path.of(instance.root());
         Path instanceMods = instanceRoot.toAbsolutePath().normalize().resolve("mods");
-        if (Files.isDirectory(instanceMods)) {
-            openInFileManager(instanceMods);
-            return;
-        }
         Path sharedMods = instancesDirectory(minecraft).resolve("mods");
-        if (Files.isDirectory(sharedMods)) {
-            openInFileManager(sharedMods);
-            return;
-        }
-        Files.createDirectories(instanceMods);
-        openInFileManager(instanceMods);
+        InstanceSettingsStore.Settings settings = InstanceSettingsStore.read(
+                instancesDirectory(minecraft), instance.id());
+        boolean isolated = settings.versionIsolation().resolve(
+                Config.VERSION_ISOLATION.get().isolates(instance.hasModLoader()));
+        Path modsDirectory = isolated ? instanceMods : sharedMods;
+        Files.createDirectories(modsDirectory);
+        openInFileManager(modsDirectory);
     }
 
     private static void openInFileManager(Path directory) throws IOException {

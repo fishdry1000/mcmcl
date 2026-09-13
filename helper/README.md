@@ -7,7 +7,7 @@ helper 是 MCMCL 的独立启动后端：单独 JVM 进程，与模组通过 std
 - **协议**（`HelperServer`，无第三方依赖）：请求校验、异步事件转发、停止/关闭生命周期。
 - **仓库发现**：`list` 读取 `versions/<instanceId>/`，支持 `<instanceId>.json` 与“目录中唯一 JSON 文件”两种 manifest 位置。
 - **安装**：`remoteVersions` 列出可安装的游戏版本或加载器版本；`install` 经 `DefaultGameBuilder` 走 HMCL Core 官方下载管线，安装原版实例或叠加加载器组件（fabric/forge/neoforge/quilt/optifine）；`repair` 经 `checkGameCompletionAsync` 为已有实例补齐缺失文件。
-- **启动**：`AuthInfo`、`LaunchOptions`（支持 `javaPath`——运行 `-version` 探测版本，及 `maxMemory`）、`DefaultLauncher`、`ProcessListener` 桥接。
+- **启动**：`AuthInfo`、`LaunchOptions`（支持 `javaPath`——运行 `-version` 探测版本、`maxMemory` 与版本隔离）、`DefaultLauncher`、`ProcessListener` 桥接。
 - **HMCL Core 适配边界**（`src/hmcl/java/`，仅 profile 构建编译）：headless repository/instance subclass 与上述能力的桥接；adapter 还会初始化 JavaFX 工具包（HMCL Core 的任务进度与快照发布依赖它）和全局 `CacheRepository`（ETag 下载缓存，位于 `<仓库>/cache/`）。
 - 未接 HMCL Core 时使用 `UnavailableHmclCoreAdapter`：`launch`/`install` 明确返回 `HMCL_CORE_UNAVAILABLE`，不存在 `launch.json` 回退。
 
@@ -73,16 +73,16 @@ HMCL Core 的任务进度与快照发布依赖 JavaFX。为了让 profile JAR �
 {"id":"h1","command":"hello"}
 {"id":"l1","command":"list"}
 {"id":"rv1","command":"remoteVersions"}
-{"id":"i1","command":"install","instanceId":"1.21.1-fabric","gameVersion":"1.21.1","loaders":[{"type":"fabric","version":"0.16.9"}]}
+{"id":"i1","command":"install","instanceId":"1.21.1-fabric","gameVersion":"1.21.1","versionIsolation":true,"loaders":[{"type":"fabric","version":"0.16.9"}]}
 {"id":"r1","command":"repair","instanceId":"26.2"}
-{"id":"l2","command":"launch","instanceId":"26.2","username":"Player","uuid":"00000000-0000-0000-0000-000000000000","accessToken":"...","userType":"msa","xuid":"...","clientId":"...","javaPath":"C:\\path\\bin\\java.exe","maxMemory":4096}
+{"id":"l2","command":"launch","instanceId":"26.2","username":"Player","uuid":"00000000-0000-0000-0000-000000000000","accessToken":"...","userType":"msa","xuid":"...","clientId":"...","javaPath":"C:\\path\\bin\\java.exe","maxMemory":4096,"versionIsolation":true}
 {"id":"s1","command":"stop","instanceId":"26.2"}
 {"id":"q1","command":"shutdown"}
 ```
 
-`launch` 的必填字段是 `instanceId`、`username`、`uuid`、`accessToken`、`userType`；`xuid`、`clientId`、`javaPath` 和 `maxMemory` 可选。`javaPath` 指向目标游戏使用的 Java 可执行文件（helper 会运行 `-version` 探测版本）；`maxMemory` 是最大堆（MB）。离线账号由模组侧构造：`uuid` 使用 `OfflinePlayer:<用户名>` 的 nameUUID，`accessToken` 使用随机 UUID，`userType` 仍为 `msa`。当前协议不携带 `userProperties`，HMCL 适配器在内部按账号类型构造对应的属性 JSON。
+`launch` 的必填字段是 `instanceId`、`username`、`uuid`、`accessToken`、`userType`；`xuid`、`clientId`、`javaPath`、`maxMemory` 和 `versionIsolation` 可选。`javaPath` 指向目标游戏使用的 Java 可执行文件（helper 会运行 `-version` 探测版本）；`maxMemory` 是最大堆（MB）；`versionIsolation` 为 `true` 时，运行目录使用 `versions/<instanceId>/`，否则使用仓库根目录，缺省为 `false`。离线账号由模组侧构造：`uuid` 使用 `OfflinePlayer:<用户名>` 的 nameUUID，`accessToken` 使用随机 UUID，`userType` 仍为 `msa`。当前协议不携带 `userProperties`，HMCL 适配器在内部按账号类型构造对应的属性 JSON。
 
-`install` 创建新实例（`instanceId` 必须不存在）；`gameVersion` 为要安装的游戏版本，可选 `loaders` 数组指定 HMCL 组件 patch id + 版本（如 `{"type":"fabric","version":"0.16.9"}`），helper 通过 `GameBuilder` 组件链安装 Fabric/Forge/NeoForge/Quilt/OptiFine 等加载器。`repair` 为已有实例补齐缺失的客户端 jar、库与资源文件（不需要 `gameVersion`）。
+`install` 创建新实例（`instanceId` 必须不存在）；`gameVersion` 为要安装的游戏版本，可选 `loaders` 数组指定 HMCL 组件 patch id + 版本（如 `{"type":"fabric","version":"0.16.9"}`），helper 通过 `GameBuilder` 组件链安装 Fabric/Forge/NeoForge/Quilt/OptiFine 等加载器。可选布尔值 `versionIsolation` 会调用 HMCL `GameBuilder.enableIsolation()`，使组件附带的 Mod 等运行目录文件直接安装到实例目录；缺省为 `false`。`repair` 为已有实例补齐缺失的客户端 jar、库与资源文件（不需要 `gameVersion`）。
 
 两者都是异步操作，复用 `launch` 的事件模型但没有 `started` 事件：进度通过 `log` 事件返回，成功以 `exit`（code 0）结束，失败以 `error` 事件结束。安装串行执行（HMCL 仓库一次只允许一个独占 draft），重复请求返回 `ALREADY_RUNNING`；安装进行中的 `launch` 会直接失败。`stop` 同时作用于启动槽与安装/修复槽；安装取消是尽力而为（中断 + `TaskExecutor.cancel()`），关闭 helper 始终可靠终止。
 
@@ -178,7 +178,7 @@ cd F:\Porj\Minecraft\mcmcl-0.1.0+mc26.2
 
 1. 创建或复用 headless 的 HMCL repository，`refresh` 后按 `GameInstanceID` 解析实例；
 2. 用 `HmclLaunchRequest` 构造 HMCL `AuthInfo`（Core 的 `AuthInfo` 不接收 `xuid`/`clientId`，两个字段仅保留在协议中）；
-3. 组装 `LaunchOptions`：实例运行目录、Java runtime（`javaPath` 存在时探测版本，否则 helper 自身 JVM）、`maxMemory`；
+3. 组装 `LaunchOptions`：按 `versionIsolation` 选择仓库根或实例目录作为运行目录、Java runtime（`javaPath` 存在时探测版本，否则 helper 自身 JVM）、`maxMemory`；
 4. `DefaultLauncher` + `ProcessListener.onLog/onExit` 映射为事件；`stop`/`shutdown` 终止游戏进程；
 5. `install`/`repair` 经 `DefaultDependencyManager.newGameBuilder`/`checkGameCompletionAsync`，任务用 `TaskExecutor` 启动并等待（`whenComplete` 组合子依赖 executor 维护的状态，不能用裸 `Task.run()`）；取消为中断 + `TaskExecutor.cancel()`；
 6. 发布前完成 GPL-3.0 合规审查；JavaFX 不随 JAR 分发。

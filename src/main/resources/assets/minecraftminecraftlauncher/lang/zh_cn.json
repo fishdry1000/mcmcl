@@ -27,6 +27,10 @@
   "screen.minecraftminecraftlauncher.edit.rename_exists": "同名实例已存在",
   "screen.minecraftminecraftlauncher.edit.java_path": "Java 路径",
   "screen.minecraftminecraftlauncher.edit.max_memory": "最大内存（MB）",
+  "screen.minecraftminecraftlauncher.edit.version_isolation": "版本隔离",
+  "screen.minecraftminecraftlauncher.edit.version_isolation.inherit": "继承全局设置",
+  "screen.minecraftminecraftlauncher.edit.version_isolation.enabled": "开启",
+  "screen.minecraftminecraftlauncher.edit.version_isolation.disabled": "关闭",
   "screen.minecraftminecraftlauncher.edit.save": "保存",
   "screen.minecraftminecraftlauncher.edit.global_hint": "留空使用全局配置",
   "screen.minecraftminecraftlauncher.launch": "启动",
@@ -86,5 +90,6 @@
   "minecraftminecraftlauncher.configuration.offlineUsername": "离线用户名",
   "minecraftminecraftlauncher.configuration.javaPath": "Java 可执行文件路径",
   "minecraftminecraftlauncher.configuration.maxMemory": "最大内存（MB）",
+  "minecraftminecraftlauncher.configuration.versionIsolation": "版本隔离策略",
   "minecraftminecraftlauncher.configuration.downloadProvider": "下载源"
 }

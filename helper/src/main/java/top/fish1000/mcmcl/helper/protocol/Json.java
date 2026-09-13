@@ -53,6 +53,18 @@ public final class Json {
         return string;
     }
 
+    public static boolean optionalBoolean(Map<String, Object> object, String key, boolean defaultValue)
+            throws ProtocolException {
+        if (!object.containsKey(key) || object.get(key) == null) {
+            return defaultValue;
+        }
+        Object value = object.get(key);
+        if (!(value instanceof Boolean bool)) {
+            throw new ProtocolException(key + " must be a JSON boolean when present");
+        }
+        return bool;
+    }
+
     public static String requiredInstanceId(Map<String, Object> object) throws ProtocolException {
         String instanceId = requiredString(object, "instanceId");
         if (!isSafeInstanceId(instanceId)) {

@@ -19,7 +19,8 @@ import java.util.Map;
 public record HmclInstallRequest(
         String instanceId,
         String gameVersion,
-        List<ComponentSpec> loaders) {
+        List<ComponentSpec> loaders,
+        boolean versionIsolation) {
 
     /** One loader component: an HMCL component patch id plus its version. */
     public record ComponentSpec(String type, String version) {
@@ -31,11 +32,12 @@ public record HmclInstallRequest(
         return new HmclInstallRequest(
                 Json.requiredInstanceId(request),
                 Json.requiredString(request, "gameVersion"),
-                parseLoaders(request));
+                parseLoaders(request),
+                Json.optionalBoolean(request, "versionIsolation", false));
     }
 
     public static HmclInstallRequest repair(Map<String, Object> request) throws ProtocolException {
-        return new HmclInstallRequest(Json.requiredInstanceId(request), null, List.of());
+        return new HmclInstallRequest(Json.requiredInstanceId(request), null, List.of(), false);
     }
 
     public boolean isNewInstall() {

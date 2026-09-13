@@ -34,6 +34,10 @@ public final class Config {
             .comment("Maximum memory in MB for launched instances. 0 uses the HMCL default.")
             .defineInRange("maxMemory", 0, 0, 65536);
 
+    public static final ModConfigSpec.EnumValue<VersionIsolationPolicy> VERSION_ISOLATION = BUILDER
+            .comment("Default version isolation policy: ALWAYS, MODDED, or NEVER.")
+            .defineEnum("versionIsolation", VersionIsolationPolicy.MODDED);
+
     public static final ModConfigSpec.ConfigValue<String> DOWNLOAD_PROVIDER = BUILDER
             .comment("Download source used when installing instances: mojang or bmclapi.")
             .define("downloadProvider", "mojang");
@@ -41,5 +45,15 @@ public final class Config {
     public static final ModConfigSpec SPEC = BUILDER.build();
 
     private Config() {
+    }
+
+    public enum VersionIsolationPolicy {
+        ALWAYS,
+        MODDED,
+        NEVER;
+
+        public boolean isolates(boolean modded) {
+            return this == ALWAYS || this == MODDED && modded;
+        }
     }
 }

@@ -27,6 +27,10 @@
   "screen.minecraftminecraftlauncher.edit.rename_exists": "An instance with this ID already exists",
   "screen.minecraftminecraftlauncher.edit.java_path": "Java executable",
   "screen.minecraftminecraftlauncher.edit.max_memory": "Maximum memory (MB)",
+  "screen.minecraftminecraftlauncher.edit.version_isolation": "Version isolation",
+  "screen.minecraftminecraftlauncher.edit.version_isolation.inherit": "Use global setting",
+  "screen.minecraftminecraftlauncher.edit.version_isolation.enabled": "Enabled",
+  "screen.minecraftminecraftlauncher.edit.version_isolation.disabled": "Disabled",
   "screen.minecraftminecraftlauncher.edit.save": "Save",
   "screen.minecraftminecraftlauncher.edit.global_hint": "Leave blank to use the global setting",
   "screen.minecraftminecraftlauncher.launch": "Launch",
@@ -86,5 +90,6 @@
   "minecraftminecraftlauncher.configuration.offlineUsername": "Offline username",
   "minecraftminecraftlauncher.configuration.javaPath": "Java executable path",
   "minecraftminecraftlauncher.configuration.maxMemory": "Maximum memory (MB)",
+  "minecraftminecraftlauncher.configuration.versionIsolation": "Version isolation policy",
   "minecraftminecraftlauncher.configuration.downloadProvider": "Download provider"
 }

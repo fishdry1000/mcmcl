@@ -118,6 +118,8 @@ public final class HmclHelperClient implements AutoCloseable {
         if (maxMemory > 0) {
             request.addProperty("maxMemory", maxMemory);
         }
+        boolean globalIsolation = Config.VERSION_ISOLATION.get().isolates(instance.hasModLoader());
+        request.addProperty("versionIsolation", overrides.versionIsolation().resolve(globalIsolation));
 
         LaunchHandle handle = new LaunchHandle(
                 instance.id(), new CompletableFuture<>(), new CompletableFuture<>());
@@ -211,6 +213,8 @@ public final class HmclHelperClient implements AutoCloseable {
         request.addProperty("instanceId", instanceId);
         if (gameVersion != null) {
             request.addProperty("gameVersion", gameVersion);
+            request.addProperty("versionIsolation",
+                    Config.VERSION_ISOLATION.get().isolates(!specs.isEmpty()));
         }
         if (!specs.isEmpty()) {
             JsonArray loaderArray = new JsonArray();

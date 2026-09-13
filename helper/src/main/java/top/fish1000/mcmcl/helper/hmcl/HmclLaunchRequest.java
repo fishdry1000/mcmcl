@@ -16,7 +16,8 @@ public record HmclLaunchRequest(
         String xuid,
         String clientId,
         String javaPath,
-        Integer maxMemory) {
+        Integer maxMemory,
+        boolean versionIsolation) {
 
     public static HmclLaunchRequest from(Map<String, Object> request) throws ProtocolException {
         String instanceId = Json.requiredInstanceId(request);
@@ -28,6 +29,7 @@ public record HmclLaunchRequest(
         String clientId = Json.optionalString(request, "clientId");
         String javaPath = Json.optionalString(request, "javaPath");
         Integer maxMemory = optionalPositiveInt(request, "maxMemory");
+        boolean versionIsolation = Json.optionalBoolean(request, "versionIsolation", false);
 
         final UUID uuid;
         try {
@@ -37,7 +39,8 @@ public record HmclLaunchRequest(
         }
 
         return new HmclLaunchRequest(
-                instanceId, username, uuid, accessToken, userType, xuid, clientId, javaPath, maxMemory);
+                instanceId, username, uuid, accessToken, userType, xuid, clientId, javaPath, maxMemory,
+                versionIsolation);
     }
 
     private static Integer optionalPositiveInt(Map<String, Object> request, String key)
@@ -66,6 +69,7 @@ public record HmclLaunchRequest(
                 + ", xuid=" + xuid
                 + ", clientId=" + clientId
                 + ", javaPath=" + javaPath
-                + ", maxMemory=" + maxMemory + ']';
+                + ", maxMemory=" + maxMemory
+                + ", versionIsolation=" + versionIsolation + ']';
     }
 }

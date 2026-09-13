@@ -179,7 +179,8 @@ public final class ProtocolTest {
         String launch = "{\"id\":\"launch-1\",\"command\":\"launch\","
                 + "\"instanceId\":\"demo\",\"username\":\"Player\","
                 + "\"uuid\":\"" + UUID.randomUUID() + "\",\"accessToken\":\"secret-token\","
-                + "\"userType\":\"msa\",\"javaPath\":\"C:\\\\java\\\\bin\\\\java.exe\",\"maxMemory\":4096}";
+                + "\"userType\":\"msa\",\"javaPath\":\"C:\\\\java\\\\bin\\\\java.exe\","
+                + "\"maxMemory\":4096,\"versionIsolation\":true}";
         List<Map<String, Object>> messages = runLaunchInteraction(launchAdapter, "demo", launch);
         check(hasResponse(messages, "launch-1", true), "launch with options should be accepted");
         check(launchAdapter.lastRequest != null
@@ -188,6 +189,16 @@ public final class ProtocolTest {
         check(launchAdapter.lastRequest != null
                         && Integer.valueOf(4096).equals(launchAdapter.lastRequest.maxMemory()),
                 "maxMemory should be forwarded to the adapter");
+        check(launchAdapter.lastRequest != null && launchAdapter.lastRequest.versionIsolation(),
+                "versionIsolation should be forwarded to the adapter");
+
+        messages = run(new RecordingAdapter(),
+                "{\"id\":\"bad-isolation\",\"command\":\"launch\","
+                        + "\"instanceId\":\"demo\",\"username\":\"Player\","
+                        + "\"uuid\":\"" + UUID.randomUUID() + "\",\"accessToken\":\"token\","
+                        + "\"userType\":\"msa\",\"versionIsolation\":\"yes\"}\n");
+        check(hasResponseWithCode(messages, "bad-isolation", "INVALID_REQUEST"),
+                "non-boolean versionIsolation should be rejected");
 
         InstallRecordingAdapter installer = new InstallRecordingAdapter(true, null, null);
         messages = run(installer,
@@ -244,6 +255,7 @@ public final class ProtocolTest {
                     + "\"instanceId\":\"demo\",\"gameVersion\":\"1.0\"}\n");
             inputWriter.write("{\"id\":\"install-loaders\",\"command\":\"install\","
                     + "\"instanceId\":\"loader-demo\",\"gameVersion\":\"1.0\","
+                    + "\"versionIsolation\":true,"
                     + "\"loaders\":[{\"type\":\"fabric\",\"version\":\"0.16.9\"}]}\n");
             inputWriter.flush();
             check(installsEntered.await(5, TimeUnit.SECONDS), "installs did not reach the adapter in time");
@@ -270,7 +282,8 @@ public final class ProtocolTest {
         check(installer2.lastInstallRequest != null
                         && installer2.lastInstallRequest.loaders().size() == 1
                         && "fabric".equals(installer2.lastInstallRequest.loaders().get(0).type())
-                        && "0.16.9".equals(installer2.lastInstallRequest.loaders().get(0).version()),
+                        && "0.16.9".equals(installer2.lastInstallRequest.loaders().get(0).version())
+                        && installer2.lastInstallRequest.versionIsolation(),
                 "loader components should reach the adapter");
     }
 
@@ -527,7 +540,7 @@ public final class ProtocolTest {
             };
 
             HmclLaunchRequest request = new HmclLaunchRequest(
-                    "demo", "Player", UUID.randomUUID(), "token", "msa", null, null, null, null);
+                    "demo", "Player", UUID.randomUUID(), "token", "msa", null, null, null, null, true);
             adapter.launch(request, events);
             check(started.get(), "real HMCL adapter did not report started");
             check(exit.get(10, TimeUnit.SECONDS) == 0, "fixture game did not exit successfully");
@@ -535,6 +548,9 @@ public final class ProtocolTest {
                     "stdout was not bridged through HMCL Core: " + logs);
             check(logs.stream().anyMatch(line -> line.contains("fixture-stderr")),
                     "stderr was not bridged through HMCL Core: " + logs);
+            check(logs.stream().anyMatch(line -> line.contains(
+                            "fixture-cwd=" + instanceRoot.toAbsolutePath().normalize())),
+                    "version isolation did not use the instance directory: " + logs);
             adapter.shutdown();
         } finally {
             deleteTree(repository);
@@ -617,7 +633,7 @@ public final class ProtocolTest {
                         "fabric version list should contain the fixture loader version: " + fabricVersions);
 
                 RecordingSink installSink = new RecordingSink();
-                adapter.install(new HmclInstallRequest("fixture", "fixture", List.of()), installSink);
+                adapter.install(new HmclInstallRequest("fixture", "fixture", List.of(), false), installSink);
                 check(installSink.exit.get(120, TimeUnit.SECONDS) == 0,
                         "fixture install did not finish successfully: "
                                 + installSink.error.get() + " logs: " + installSink.logs);
@@ -630,7 +646,7 @@ public final class ProtocolTest {
 
                 Files.delete(installedJar);
                 RecordingSink repairSink = new RecordingSink();
-                adapter.install(new HmclInstallRequest("fixture", null, List.of()), repairSink);
+                adapter.install(new HmclInstallRequest("fixture", null, List.of(), false), repairSink);
                 check(repairSink.exit.get(120, TimeUnit.SECONDS) == 0,
                         "fixture repair did not finish: " + repairSink.error.get());
                 check(Files.isRegularFile(installedJar), "repair did not restore the client jar");
@@ -639,7 +655,7 @@ public final class ProtocolTest {
                 // endpoints, then launching it, exercises the loader chain.
                 RecordingSink fabricSink = new RecordingSink();
                 adapter.install(new HmclInstallRequest("fabric-demo", "fixture-vanilla",
-                                List.of(new HmclInstallRequest.ComponentSpec("fabric", "0.16.9"))),
+                                List.of(new HmclInstallRequest.ComponentSpec("fabric", "0.16.9")), true),
                         fabricSink);
                 check(fabricSink.exit.get(120, TimeUnit.SECONDS) == 0,
                         "fabric install did not finish: " + fabricSink.error.get() + " logs: " + fabricSink.logs);
@@ -651,18 +667,23 @@ public final class ProtocolTest {
 
                 RecordingSink fabricLaunchSink = new RecordingSink();
                 HmclLaunchRequest fabricLaunch = new HmclLaunchRequest(
-                        "fabric-demo", "Player", UUID.randomUUID(), "token", "msa", null, null, null, null);
+                        "fabric-demo", "Player", UUID.randomUUID(), "token", "msa",
+                        null, null, null, null, true);
                 adapter.launch(fabricLaunch, fabricLaunchSink);
                 check(fabricLaunchSink.started.get(), "fabric instance did not report started");
                 check(fabricLaunchSink.exit.get(30, TimeUnit.SECONDS) == 0,
                         "fabric instance did not exit successfully: " + fabricLaunchSink.error.get());
                 check(fabricLaunchSink.logs.stream().anyMatch(line -> line.contains("fixture-stdout")),
                         "fabric instance stdout was not bridged: " + fabricLaunchSink.logs);
+                check(fabricLaunchSink.logs.stream().anyMatch(line -> line.contains(
+                                "fixture-cwd=" + repository.resolve("versions/fabric-demo").toAbsolutePath().normalize())),
+                        "fabric version isolation did not use the instance directory: " + fabricLaunchSink.logs);
                 adapter.shutdown();
 
                 RecordingSink launchSink = new RecordingSink();
                 HmclLaunchRequest request = new HmclLaunchRequest(
-                        "fixture", "Player", UUID.randomUUID(), "token", "msa", null, null, null, null);
+                        "fixture", "Player", UUID.randomUUID(), "token", "msa",
+                        null, null, null, null, false);
                 adapter.launch(request, launchSink);
                 check(launchSink.started.get(), "installed instance did not report started");
                 check(launchSink.exit.get(30, TimeUnit.SECONDS) == 0,
