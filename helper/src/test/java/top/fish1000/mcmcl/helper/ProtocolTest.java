@@ -477,8 +477,10 @@ public final class ProtocolTest {
             Main.HelperArgs defaults = Main.parseHelperArgs(new String[]{"--repository", repository.toString()});
             check("mojang".equals(defaults.downloadProvider()), "download provider default");
             check(JavaFxBootstrap.DEFAULT_VERSION.equals(defaults.javafxVersion()), "javafx version default");
-            check(defaults.javafxDirectory().equals(repository.resolve("javafx")),
-                    "javafx dir should default to the repository");
+            check(defaults.javafxDirectory().equals(Main.defaultJavaFxDirectory()),
+                    "javafx dir should default beside the helper");
+            check(!defaults.javafxDirectory().startsWith(repository),
+                    "javafx dir must not follow the Minecraft repository");
             check(JavaFxBootstrap.DEFAULT_REPOSITORY.equals(defaults.javafxRepository()),
                     "javafx repo default");
         } finally {

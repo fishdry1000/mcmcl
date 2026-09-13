@@ -133,8 +133,29 @@ public final class Main {
                 repository,
                 validateDownloadProvider(downloadProvider),
                 javafxVersion,
-                javafxDirectory != null ? javafxDirectory : repository.resolve("javafx"),
+                javafxDirectory != null ? javafxDirectory : defaultJavaFxDirectory(),
                 javafxRepository);
+    }
+
+    /**
+     * Keeps helper runtime dependencies beside the helper instead of coupling
+     * them to the independently configurable Minecraft repository.
+     */
+    static Path defaultJavaFxDirectory() {
+        try {
+            Path codeSource = Path.of(Main.class.getProtectionDomain()
+                    .getCodeSource().getLocation().toURI()).toAbsolutePath().normalize();
+            if (Files.isRegularFile(codeSource)) {
+                Path parent = codeSource.getParent();
+                if (parent != null) {
+                    return parent.resolve("javafx");
+                }
+            }
+        } catch (Exception ignored) {
+            // Development classpaths and unusual launchers fall back to the
+            // process directory, still independent of --repository.
+        }
+        return Path.of("javafx").toAbsolutePath().normalize();
     }
 
     private static String valueOf(String[] args, int index, String option) {

@@ -55,10 +55,10 @@ java -jar mcmcl-hmcl-helper.jar --repository <HMCL 游戏仓库根目录> [选�
 
 ## JavaFX 运行时
 
-HMCL Core 的任务进度与快照发布依赖 JavaFX。为了让 profile JAR 跨平台，JavaFX 不打包进 JAR：首次启动时 helper 检测 classpath 上没有 JavaFX，就按当前平台（Windows/macOS/Linux × x64/AArch64）从 Maven 仓库下载 `javafx-base`/`javafx-graphics`/`javafx-controls` 三个模块到 `<仓库>/javafx/<版本>-<平台>/`，校验 SHA-1 后带着扩展 classpath 重启自身；此后启动直接复用缓存，不再联网。也可以手动预置缓存目录（离线机器）：放入平台匹配的 `javafx-base.jar`、`javafx-graphics.jar`、`javafx-controls.jar`，helper 会直接使用，不做任何网络请求。
+HMCL Core 的任务进度与快照发布依赖 JavaFX。为了让 profile JAR 跨平台，JavaFX 不打包进 JAR：首次启动时 helper 检测 classpath 上没有 JavaFX，就按当前平台（Windows/macOS/Linux × x64/AArch64）从 Maven 仓库下载 `javafx-base`/`javafx-graphics`/`javafx-controls` 三个模块到 `<helper JAR 所在目录>/javafx/<版本>-<平台>/`，校验 SHA-1 后带着扩展 classpath 重启自身；此后启动直接复用缓存，不再联网。缓存位置与 `--repository` 完全独立。也可以手动预置缓存目录（离线机器）：放入平台匹配的 `javafx-base.jar`、`javafx-graphics.jar`、`javafx-controls.jar`，helper 会直接使用，不做任何网络请求。
 
 - `--javafx-version <v>`：JavaFX 版本，默认 `25`；
-- `--javafx-dir <dir>`：缓存目录，默认 `<仓库>/javafx`；
+- `--javafx-dir <dir>`：缓存目录，默认 `<helper JAR 所在目录>/javafx`；非 JAR 开发启动时默认当前工作目录下的 `javafx`；
 - `--javafx-repo <url>`：Maven 仓库根，默认 Maven Central（`https://repo1.maven.org/maven2`），可指向任意镜像（如 `https://maven.aliyun.com/repository/public`）。
 
 注意：Linux 无显示器的服务器环境无法启动 JavaFX 工具包（HMCL 本身同理），桌面环境不受影响。

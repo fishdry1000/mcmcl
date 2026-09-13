@@ -370,7 +370,9 @@ public final class HmclHelperClient implements AutoCloseable {
                      "-jar",
                      helperJar.toString(),
                     "--repository",
-                     repositoryDirectory.toString()
+                     repositoryDirectory.toString(),
+                    "--javafx-dir",
+                     helperJar.resolveSibling("javafx").toString()
             );
             String downloadProvider = Config.DOWNLOAD_PROVIDER.get();
             if ("mojang".equals(downloadProvider) || "bmclapi".equals(downloadProvider)) {
