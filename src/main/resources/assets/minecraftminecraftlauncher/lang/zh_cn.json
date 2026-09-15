@@ -83,6 +83,7 @@
   "minecraftminecraftlauncher.configuration.title": "MCMCL 配置",
   "minecraftminecraftlauncher.configuration.section.minecraftminecraftlauncher.client.toml": "MCMCL 配置",
   "minecraftminecraftlauncher.configuration.section.minecraftminecraftlauncher.client.toml.title": "MCMCL 配置",
+  "minecraftminecraftlauncher.configuration.showLauncherButton": "显示 MCMCL 按钮",
   "minecraftminecraftlauncher.configuration.instancesDirectory": "HMCL 仓库目录",
   "minecraftminecraftlauncher.configuration.hmclHelperJar": "HMCL Helper JAR",
   "minecraftminecraftlauncher.configuration.maxInstances": "最大实例数",

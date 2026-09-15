@@ -6,6 +6,10 @@ import net.neoforged.neoforge.common.ModConfigSpec;
 public final class Config {
     private static final ModConfigSpec.Builder BUILDER = new ModConfigSpec.Builder();
 
+    public static final ModConfigSpec.BooleanValue SHOW_LAUNCHER_BUTTON = BUILDER
+            .comment("Whether to show the MCMCL button on the title and pause screens.")
+            .define("showLauncherButton", true);
+
     public static final ModConfigSpec.ConfigValue<String> INSTANCES_DIRECTORY = BUILDER
             .comment("HMCL repository directory. Relative paths are resolved from the Minecraft game directory.")
             .define("instancesDirectory", "mcmcl/hmcl");

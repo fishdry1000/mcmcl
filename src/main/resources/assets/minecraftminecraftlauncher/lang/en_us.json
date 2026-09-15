@@ -83,6 +83,7 @@
   "minecraftminecraftlauncher.configuration.title": "MCMCL Configuration",
   "minecraftminecraftlauncher.configuration.section.minecraftminecraftlauncher.client.toml": "MCMCL Configuration",
   "minecraftminecraftlauncher.configuration.section.minecraftminecraftlauncher.client.toml.title": "MCMCL Configuration",
+  "minecraftminecraftlauncher.configuration.showLauncherButton": "Show MCMCL button",
   "minecraftminecraftlauncher.configuration.instancesDirectory": "HMCL repository directory",
   "minecraftminecraftlauncher.configuration.hmclHelperJar": "HMCL Helper JAR",
   "minecraftminecraftlauncher.configuration.maxInstances": "Maximum instances",

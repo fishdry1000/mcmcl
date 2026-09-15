@@ -15,12 +15,13 @@ Minecraft Minecraft Launcher 是一款运行在 Minecraft 26.2 里的启动器 N
 
 ## 使用
 
-在标题界面或暂停菜单点击「打开 MCMCL」，也可以按 `M`。
+在标题界面或暂停菜单点击「打开 MCMCL」，也可以按 `M`；快捷键可在 Minecraft 的“控制”设置中修改。
 
 ## 配置
 
 | 配置项               | 说明                                        | 默认值                  |
 | -------------------- | ------------------------------------------- | ----------------------- |
+| `showLauncherButton` | 是否在标题界面和暂停菜单显示 MCMCL 按钮     | 开                      |
 | `instancesDirectory` | 实例仓库目录                                | `mcmcl/hmcl`            |
 | `hmclHelperJar`      | 启动后端 JAR 位置（一般不用改）             | `mcmcl/hmcl-helper.jar` |
 | `offlineMode`        | 使用离线账号                                | 关                      |

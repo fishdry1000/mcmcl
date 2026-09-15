@@ -43,6 +43,10 @@ public final class MinecraftMinecraftLauncherClient {
 
     @SubscribeEvent
     public void onScreenInit(ScreenEvent.Init.Post event) {
+        if (!Config.SHOW_LAUNCHER_BUTTON.get()) {
+            return;
+        }
+
         Screen screen = event.getScreen();
         if (!(screen instanceof TitleScreen) && !(screen instanceof PauseScreen)) {
             return;
