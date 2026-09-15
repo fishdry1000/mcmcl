@@ -1,0 +1,183 @@
+name: HMCL sync
+
+on:
+  schedule:
+    # Check the moving upstream branch once a week, without making the
+    # release build depend on a moving branch.
+    - cron: "30 2 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: hmcl-sync
+  cancel-in-progress: false
+
+# The job that builds upstream code only needs read access.  In particular,
+# do not expose a write-capable token while executing the HMCL checkout.
+permissions:
+  contents: read
+
+jobs:
+  candidate:
+    name: Test latest HMCL
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    outputs:
+      changed: ${{ steps.resolve.outputs.changed }}
+      sha: ${{ steps.resolve.outputs.sha }}
+      pinned: ${{ steps.resolve.outputs.pinned }}
+    steps:
+      - name: Checkout MCMCL
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: false
+
+      - name: Resolve latest HMCL commit
+        id: resolve
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          sha="$(git ls-remote https://github.com/HMCL-dev/HMCL.git refs/heads/main | awk 'NR == 1 { print $1 }')"
+          pinned="$(sed -n 's/^hmclPinnedCommit=//p' helper/gradle.properties | head -n 1 | tr -d '\r')"
+
+          if [[ ! "$sha" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Could not resolve a full HMCL main SHA: $sha" >&2
+            exit 1
+          fi
+          if [[ ! "$pinned" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Invalid hmclPinnedCommit: $pinned" >&2
+            exit 1
+          fi
+
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "pinned=$pinned" >> "$GITHUB_OUTPUT"
+          if [[ "$sha" == "$pinned" ]]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "HMCL is already pinned to $sha"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "HMCL update available: $pinned -> $sha"
+          fi
+
+      - name: Checkout HMCL candidate
+        if: steps.resolve.outputs.changed == 'true'
+        uses: actions/checkout@v7
+        with:
+          repository: HMCL-dev/HMCL
+          ref: ${{ steps.resolve.outputs.sha }}
+          path: .hmcl
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Setup JDK 25
+        if: steps.resolve.outputs.changed == 'true'
+        uses: actions/setup-java@v6
+        with:
+          java-version: "25"
+          distribution: "temurin"
+
+      - name: Setup Gradle
+        if: steps.resolve.outputs.changed == 'true'
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Install headless JavaFX display
+        if: steps.resolve.outputs.changed == 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb
+
+      - name: Make Gradle wrapper executable
+        if: steps.resolve.outputs.changed == 'true'
+        run: chmod +x ./gradlew
+
+      - name: Build and test HMCL profile helper
+        if: steps.resolve.outputs.changed == 'true'
+        env:
+          HMCL_CHECKOUT: ${{ github.workspace }}/.hmcl
+          HMCL_COMMIT: ${{ steps.resolve.outputs.sha }}
+        run: |
+          xvfb-run -a ./gradlew --no-daemon -p helper \
+            "-PhmclCheckout=$HMCL_CHECKOUT" \
+            "-PhmclCommit=$HMCL_COMMIT" \
+            clean test jar
+
+      - name: Build mod with bundled helper
+        if: steps.resolve.outputs.changed == 'true'
+        run: ./gradlew --no-daemon build -PrequireHelperEmbed=true
+
+  propose:
+    name: Propose HMCL pin update
+    needs: candidate
+    if: needs.candidate.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout MCMCL
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: false
+
+      - name: Update pin and current build examples
+        env:
+          HMCL_COMMIT: ${{ needs.candidate.outputs.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          python3 - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          sha = os.environ["HMCL_COMMIT"]
+          replacements = [
+              (Path("helper/gradle.properties"),
+               r"(?m)^(hmclPinnedCommit=)[0-9a-f]{40}(\r?)$",
+               rf"\g<1>{sha}\g<2>", 1),
+              (Path("README.md"),
+               r"(checkout )[0-9a-f]{40}",
+               rf"\g<1>{sha}", 2),
+              (Path("helper/README.md"),
+               r"(\"hmclCommit\":\")[0-9a-f]{40}(\")",
+               rf"\g<1>{sha}\g<2>", 1),
+          ]
+
+          for path, pattern, replacement, expected in replacements:
+              with path.open("r", encoding="utf-8", newline="") as file:
+                  content = file.read()
+              updated, count = re.subn(pattern, replacement, content)
+              if count != expected:
+                  raise SystemExit(
+                      f"Expected {expected} replacement(s) in {path}, got {count}"
+                  )
+              with path.open("w", encoding="utf-8", newline="") as file:
+                  file.write(updated)
+          PY
+
+          grep -q "^hmclPinnedCommit=${HMCL_COMMIT}$" helper/gradle.properties
+
+      - name: Create HMCL update PR
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          base: main
+          branch: codex/hmcl-sync
+          delete-branch: true
+          commit-message: "chore: update pinned HMCL Core to ${{ needs.candidate.outputs.sha }}"
+          title: "chore: update HMCL Core to ${{ needs.candidate.outputs.sha }}"
+          body: |
+            HMCL `main` advanced from `${{ needs.candidate.outputs.pinned }}` to `${{ needs.candidate.outputs.sha }}`.
+
+            The candidate was checked out at the exact commit and passed:
+            - `helper`: HMCL profile `clean test jar` under JDK 25
+            - root project: `build -PrequireHelperEmbed=true`
+
+            The pin remains an exact commit so release builds stay reproducible.
