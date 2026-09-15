@@ -89,7 +89,7 @@ HMCL Core 的任务进度与快照发布依赖 JavaFX。为了让 profile JAR �
 模组在其他请求前自动发送 `hello`，返回协议版本、helper 版本、后端名称、能力位与 HMCL 提交：
 
 ```json
-{"type":"response","id":"h1","ok":true,"protocolVersion":1,"helperVersion":"0.1.0","backend":"hmcl-core","launchAvailable":true,"installAvailable":true,"hmclProfile":true,"hmclCommit":"df52bc6e81e2e1116c131483dfb9996fdb7b2b10"}
+{"type":"response","id":"h1","ok":true,"protocolVersion":1,"helperVersion":"0.1.0","backend":"hmcl-core","launchAvailable":true,"installAvailable":true,"hmclProfile":true,"hmclCommit":"090f0b9822a2860f4c3dc1008d9528d304d72d10"}
 ```
 
 协议版本不兼容时，模组会关闭该 helper 并显示明确错误；默认无 HMCL profile 的 JAR 报告 `backend:"unavailable"`、`launchAvailable:false`、`installAvailable:false`。
