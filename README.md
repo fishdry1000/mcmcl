@@ -39,7 +39,7 @@ Minecraft Minecraft Launcher 是一款运行在 Minecraft 26.2 里的启动器 N
 
 ```powershell
 git clone https://github.com/HMCL-dev/HMCL.git ..\HMCL
-git -C ..\HMCL checkout df52bc6e81e2e1116c131483dfb9996fdb7b2b10
+git -C ..\HMCL checkout 090f0b9822a2860f4c3dc1008d9528d304d72d10
 
 .\gradlew.bat -p helper "-PhmclCheckout=$((Resolve-Path '..\HMCL').Path)" clean test installHelper
 .\gradlew.bat build
@@ -49,7 +49,7 @@ git -C ..\HMCL checkout df52bc6e81e2e1116c131483dfb9996fdb7b2b10
 
 ```bash
 git clone https://github.com/HMCL-dev/HMCL.git ../HMCL
-git -C ../HMCL checkout df52bc6e81e2e1116c131483dfb9996fdb7b2b10
+git -C ../HMCL checkout 090f0b9822a2860f4c3dc1008d9528d304d72d10
 
 ./gradlew -p helper "-PhmclCheckout=$(cd ../HMCL && pwd)" clean test installHelper
 ./gradlew build
