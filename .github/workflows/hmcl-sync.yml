@@ -169,7 +169,7 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           base: main
-          branch: codex/hmcl-sync
+          branch: ci/hmcl-sync
           delete-branch: true
           commit-message: "chore: update pinned HMCL Core to ${{ needs.candidate.outputs.sha }}"
           title: "chore: update HMCL Core to ${{ needs.candidate.outputs.sha }}"
