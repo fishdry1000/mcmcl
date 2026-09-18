@@ -100,15 +100,15 @@ public final class ProtocolTest {
     private static void repositoryCatalogFindsConventionalAndFallbackManifests() throws Exception {
         Path repository = Files.createTempDirectory("mcmcl-helper-catalog-");
         try {
-            Path conventional = Files.createDirectories(repository.resolve("versions/1.26.2"));
-            Files.writeString(conventional.resolve("1.26.2.json"), "{}", StandardCharsets.UTF_8);
+            Path conventional = Files.createDirectories(repository.resolve("versions/1.26.3"));
+            Files.writeString(conventional.resolve("1.26.3.json"), "{}", StandardCharsets.UTF_8);
             Path modded = Files.createDirectories(repository.resolve("versions/fabric-demo"));
             Files.writeString(modded.resolve("fabric-demo.json"), """
                     {"libraries":[{"name":"net.fabricmc:fabric-loader:0.16.9"}]}
                     """, StandardCharsets.UTF_8);
             Path patched = Files.createDirectories(repository.resolve("versions/patched-demo"));
             Files.writeString(patched.resolve("patched-demo.json"), """
-                    {"patches":[{"id":"game"},{"id":"neoforge","inheritsFrom":"1.26.2"}]}
+                    {"patches":[{"id":"game"},{"id":"neoforge","inheritsFrom":"1.26.3"}]}
                     """, StandardCharsets.UTF_8);
             Path fallback = Files.createDirectories(repository.resolve("versions/custom"));
             Files.writeString(fallback.resolve("profile.json"), "{}", StandardCharsets.UTF_8);
@@ -116,7 +116,7 @@ public final class ProtocolTest {
 
             List<InstanceDescriptor> instances = new top.fish1000.mcmcl.helper.repository.RepositoryInstanceCatalog(repository).list();
             check(instances.size() == 4, "catalog should ignore directories without a manifest");
-            check(instances.get(0).instanceId().equals("1.26.2"), "catalog should sort instance ids");
+            check(instances.get(0).instanceId().equals("1.26.3"), "catalog should sort instance ids");
             check(instances.get(0).loader().isEmpty(), "vanilla manifest should report no loader");
             check(instances.get(1).manifest().getFileName().toString().equals("profile.json"),
                     "catalog should support HMCL's single-json fallback");

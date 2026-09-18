@@ -4,14 +4,14 @@
 
 **！！⚠赤石警告⚠！！**
 
-Minecraft Minecraft Launcher 是一款运行在 Minecraft 26.2 里的启动器 NeoForge 模组。
+Minecraft Minecraft Launcher 是一款运行在 Minecraft 26.3 里的启动器 NeoForge 模组。
 
 由 [HMCL](https://github.com/HMCL-dev/HMCL) 核心强力驱动。
 
 ## 安装
 
 1. 从 [Releases](../../releases) 下载模组 JAR，放入 `mods` 文件夹；
-2. 使用 Minecraft 26.2 + NeoForge 启动游戏。
+2. 使用 Minecraft 26.3 + NeoForge 启动游戏。
 
 ## 使用
 

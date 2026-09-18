@@ -26,7 +26,7 @@ import net.neoforged.neoforge.common.NeoForge;
 public final class MinecraftMinecraftLauncherClient {
     private static final KeyMapping OPEN_LAUNCHER = new KeyMapping(
             "key.minecraftminecraftlauncher.open_launcher",
-            InputConstants.Type.KEYSYM,
+            InputConstants.Type.KEYBOARD,
             InputConstants.KEY_M,
             KeyMapping.Category.MISC
     );

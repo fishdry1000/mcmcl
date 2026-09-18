@@ -77,7 +77,7 @@ if (hmclCheckout != null) {
 if (hmclProfile) {
     // HMCL's current JavaFX runtime is compiled for Java 25.  Keep the
     // helper sources/Core ABI at release 17 below, but run profile tasks on
-    // the Java 25 runtime that is also required by Minecraft 26.2.
+    // the Java 25 runtime that is also required by Minecraft 26.3.
     java.toolchain.languageVersion = JavaLanguageVersion.of(25)
 
     // src/hmcl is deliberately invisible in the default build.  It contains

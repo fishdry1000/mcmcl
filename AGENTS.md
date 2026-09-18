@@ -2,7 +2,7 @@
 
 ## 仓库简介
 
-MCMCL（Minecraft Minecraft Launcher）是一个运行在 Minecraft 内的 NeoForge 模组（目标 Minecraft 26.2），通过独立的 helper JVM 启动、安装与管理其他 Minecraft 实例：
+MCMCL（Minecraft Minecraft Launcher）是一个运行在 Minecraft 内的 NeoForge 模组（目标 Minecraft 26.3），通过独立的 helper JVM 启动、安装与管理其他 Minecraft 实例：
 
 ```
 Minecraft 内 GUI → JSON Lines（stdin/stdout）→ mcmcl-hmcl-helper.jar → HMCL Core → 目标 Minecraft
@@ -22,7 +22,7 @@ Minecraft 内 GUI → JSON Lines（stdin/stdout）→ mcmcl-hmcl-helper.jar → 
 开发环境为 Windows，使用 `gradlew.bat`（CI 在 Linux 上用 `./gradlew`）。以下命令均从仓库根目录执行。
 
 ```powershell
-# 模组（Java 25，NeoForge 26.2）
+# 模组（Java 25，NeoForge 26.3）
 ./gradlew.bat build
 ./gradlew.bat runClient
 
@@ -74,4 +74,4 @@ Minecraft 内 GUI → JSON Lines（stdin/stdout）→ mcmcl-hmcl-helper.jar → 
 - 根目录下的 `net/` 与 `META-INF/` 是空的残留目录，不是源码。
 - `run/` 是被 gitignore 的开发运行目录（开发客户端的游戏目录），包含 `mcmcl/hmcl-helper.jar` 和 `mcmcl/hmcl/` HMCL 仓库。
 - 仓库根目录的 `stderr.log` 是未跟踪的临时文件。
-- 目标版本：Minecraft 26.2、NeoForge 26.2.0.86、modid `minecraftminecraftlauncher`；模组 Java 25 / helper 基线 Java 17（profile 构建运行在 JDK 25 上）。
+- 目标版本：Minecraft 26.3、NeoForge 26.3.0.4-beta、modid `minecraftminecraftlauncher`；模组 Java 25 / helper 基线 Java 17（profile 构建运行在 JDK 25 上）。

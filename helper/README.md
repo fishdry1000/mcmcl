@@ -13,7 +13,7 @@ helper 是 MCMCL 的独立启动后端：单独 JVM 进程，与模组通过 std
 
 ## 构建
 
-协议代码和 HMCL Core ABI 以 Java 17 为基线；HMCL checkout 的 JavaFX 25 profile 要求用 JDK 25 构建、测试和运行（与 Minecraft 26.2 一致）。
+协议代码和 HMCL Core ABI 以 Java 17 为基线；HMCL checkout 的 JavaFX 25 profile 要求用 JDK 25 构建、测试和运行（与 Minecraft 26.3 一致）。
 
 ```powershell
 # 无依赖协议构建（JDK 17 即可）
@@ -74,9 +74,9 @@ HMCL Core 的任务进度与快照发布依赖 JavaFX。为了让 profile JAR �
 {"id":"l1","command":"list"}
 {"id":"rv1","command":"remoteVersions"}
 {"id":"i1","command":"install","instanceId":"1.21.1-fabric","gameVersion":"1.21.1","versionIsolation":true,"loaders":[{"type":"fabric","version":"0.16.9"}]}
-{"id":"r1","command":"repair","instanceId":"26.2"}
-{"id":"l2","command":"launch","instanceId":"26.2","username":"Player","uuid":"00000000-0000-0000-0000-000000000000","accessToken":"...","userType":"msa","xuid":"...","clientId":"...","javaPath":"C:\\path\\bin\\java.exe","maxMemory":4096,"versionIsolation":true}
-{"id":"s1","command":"stop","instanceId":"26.2"}
+{"id":"r1","command":"repair","instanceId":"26.3"}
+{"id":"l2","command":"launch","instanceId":"26.3","username":"Player","uuid":"00000000-0000-0000-0000-000000000000","accessToken":"...","userType":"msa","xuid":"...","clientId":"...","javaPath":"C:\\path\\bin\\java.exe","maxMemory":4096,"versionIsolation":true}
+{"id":"s1","command":"stop","instanceId":"26.3"}
 {"id":"q1","command":"shutdown"}
 ```
 
@@ -107,12 +107,12 @@ HMCL Core 的任务进度与快照发布依赖 JavaFX。为了让 profile JAR �
 
 ```json
 {
-  "instanceId":"1.26.2",
-  "name":"1.26.2",
-  "version":"1.26.2",
+  "instanceId":"1.26.3",
+  "name":"1.26.3",
+  "version":"1.26.3",
   "loader":"",
-  "root":"C:\\path\\to\\.minecraft\\versions\\1.26.2",
-  "manifest":"C:\\path\\to\\.minecraft\\versions\\1.26.2\\1.26.2.json"
+  "root":"C:\\path\\to\\.minecraft\\versions\\1.26.3",
+  "manifest":"C:\\path\\to\\.minecraft\\versions\\1.26.3\\1.26.3.json"
 }
 ```
 
@@ -121,7 +121,7 @@ HMCL Core 的任务进度与快照发布依赖 JavaFX。为了让 profile JAR �
 `remoteVersions` 成功时增加 `versions` 数组（`id`/`type`/`releaseTime`）：
 
 ```json
-{"type":"response","id":"rv1","ok":true,"versions":[{"id":"26.2","type":"release","releaseTime":"2026-06-09T12:05:32+00:00"}]}
+{"type":"response","id":"rv1","ok":true,"versions":[{"id":"26.3","type":"release","releaseTime":"2026-09-15T11:23:02+00:00"}]}
 ```
 
 不带参数时返回全部游戏版本（按发布时间从新到旧）；携带可选 `component`（HMCL patch id，如 `fabric`/`forge`/`neoforge`/`quilt`/`optifine`）和 `gameVersion` 时返回该游戏版本可用的加载器版本（`id` 为组件版本号）。`component` 必须与 `gameVersion` 同时提供，否则返回 `INVALID_REQUEST`；未接入 HMCL Core 时返回 `HMCL_CORE_UNAVAILABLE`。
@@ -131,10 +131,10 @@ HMCL Core 的任务进度与快照发布依赖 JavaFX。为了让 profile JAR �
 ### 异步事件
 
 ```json
-{"type":"event","instanceId":"26.2","event":"started"}
-{"type":"event","instanceId":"26.2","event":"log","line":"[main/INFO]: ..."}
-{"type":"event","instanceId":"26.2","event":"exit","code":0}
-{"type":"event","instanceId":"26.2","event":"error","code":"HMCL_CORE_ERROR","message":"..."}
+{"type":"event","instanceId":"26.3","event":"started"}
+{"type":"event","instanceId":"26.3","event":"log","line":"[main/INFO]: ..."}
+{"type":"event","instanceId":"26.3","event":"exit","code":0}
+{"type":"event","instanceId":"26.3","event":"error","code":"HMCL_CORE_ERROR","message":"..."}
 ```
 
 `started`、`log`、`exit`、`error` 是唯一的事件名。helper 会用锁保护 stdout，因此 HMCL 线程产生的日志不会和响应交错。空白输入行会忽略；无法解析的行会返回 `id:null` 的 `INVALID_REQUEST` 响应并继续服务。
@@ -166,7 +166,7 @@ git -C C:\src\HMCL checkout <经过审查的固定提交>
 ```powershell
 cd C:\src\HMCL
 .\gradlew :HMCLCore:publishToMavenLocal
-cd F:\Porj\Minecraft\mcmcl-0.1.0+mc26.2
+cd <MCMCL checkout>
 .\gradlew.bat -p helper "-PhmclGroup=HMCL3" "-PhmclVersion=unspecified" test
 ```
 
@@ -185,7 +185,7 @@ cd F:\Porj\Minecraft\mcmcl-0.1.0+mc26.2
 
 ## 验收记录
 
-- 真实 profile：`hello`/`list`/`shutdown` 协议冒烟；动态 JVM fixture 验证 `DefaultLauncher` 的进程启动、stdout/stderr 转发、退出事件；用完整 Minecraft 26.2 文件集创建真实游戏进程、转发日志并 `stop` 结束。
+- 真实 profile：`hello`/`list`/`shutdown` 协议冒烟；动态 JVM fixture 验证 `DefaultLauncher` 的进程启动、stdout/stderr 转发、退出事件；用完整 Minecraft 文件集创建真实游戏进程、转发日志并 `stop` 结束。
 - 安装路径（本地 BMCLAPI 兼容 fixture 服务器）：`remoteVersions`；全新 `install`（版本 JSON、客户端 jar、资源索引带 SHA-1 落盘）；删除客户端 jar 后 `repair` 补齐；**Fabric 加载器实例**（假 fabric-meta 端点提供加载器列表与 launch meta，产物含 fabric 补丁与库文件）及“安装后启动该实例”全链路。
 - **Linux**（WSL2 Ubuntu 24.04 + Oracle JDK 25）：bootstrap 识别 linux classifier、从 Maven Central 下载 JavaFX linux 模块并缓存复用、JavaFX 工具包启动；`install` 从 Mojang 真实下载 264MB 原版实例（1.7.10），删除客户端 jar 后 `repair` 补齐。
 - 待验收：Forge/NeoForge/Quilt 安装器链对真实镜像服务器的下载。
