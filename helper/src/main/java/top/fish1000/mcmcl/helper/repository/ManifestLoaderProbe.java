@@ -12,7 +12,7 @@ import java.util.Map;
 /**
  * Best-effort read-only sniff of the mod loader recorded in a version
  * manifest, used to label instances in the UI and to decide whether a mods
- * folder is meaningful.  It never fails listing: unreadable or unparsable
+ * folder is meaningful. It never fails listing: unreadable or unparsable
  * manifests simply report no loader.
  */
 public final class ManifestLoaderProbe {
@@ -20,23 +20,28 @@ public final class ManifestLoaderProbe {
     /** Loader component ids HMCL writes into the manifest's patches array. */
     private static final List<String> PATCH_IDS = List.of(
             "fabric", "forge", "neoforge", "quilt", "optifine", "liteloader", "cleanroom");
-    /** Marker substrings of library coordinates for manifests without patches, in priority order. */
+    /**
+     * Marker substrings of library coordinates for manifests without patches, in
+     * priority order.
+     */
     private static final List<String[]> LOADER_MARKERS = List.of(
-            new String[]{"net.fabricmc:fabric-loader", "fabric"},
-            new String[]{"org.quiltmc:quilt-loader", "quilt"},
-            new String[]{"net.neoforged.fancymodloader", "neoforge"},
-            new String[]{"net.neoforged:neoforge", "neoforge"},
-            new String[]{"net.minecraftforge:forge", "forge"},
-            new String[]{"net.minecraftforge:minecraftforge", "forge"},
-            new String[]{"net.minecraftforge:fmlcore", "forge"},
-            new String[]{"optifine:optifine", "optifine"},
-            new String[]{"com.mumfrey:liteloader", "liteloader"}
-    );
+            new String[] { "net.fabricmc:fabric-loader", "fabric" },
+            new String[] { "org.quiltmc:quilt-loader", "quilt" },
+            new String[] { "net.neoforged.fancymodloader", "neoforge" },
+            new String[] { "net.neoforged:neoforge", "neoforge" },
+            new String[] { "net.minecraftforge:forge", "forge" },
+            new String[] { "net.minecraftforge:minecraftforge", "forge" },
+            new String[] { "net.minecraftforge:fmlcore", "forge" },
+            new String[] { "optifine:optifine", "optifine" },
+            new String[] { "com.mumfrey:liteloader", "liteloader" });
 
     private ManifestLoaderProbe() {
     }
 
-    /** Returns a loader id such as {@code fabric}, or an empty string for vanilla or unreadable manifests. */
+    /**
+     * Returns a loader id such as {@code fabric}, or an empty string for vanilla or
+     * unreadable manifests.
+     */
     public static String detect(Path manifest) {
         if (manifest == null || !Files.isRegularFile(manifest)) {
             return "";
@@ -50,7 +55,7 @@ public final class ManifestLoaderProbe {
                 return "";
             }
             // HMCL-installed instances record their components as patches
-            // (game/neoforge/...), which is the most precise signal.  The
+            // (game/neoforge/...), which is the most precise signal. The
             // merged libraries of a NeoForge install notably do not contain
             // a "net.neoforged:neoforge" coordinate at all.
             Object patches = manifestObject.get("patches");

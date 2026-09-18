@@ -19,11 +19,13 @@ import java.util.concurrent.TimeUnit;
  * Resolves the JavaFX modules HMCL Core needs at runtime, so the HMCL profile
  * JAR itself stays platform independent.
  *
- * <p>Like HMCL's own bootstrap, the first startup downloads the three JavaFX
+ * <p>
+ * Like HMCL's own bootstrap, the first startup downloads the three JavaFX
  * modules for the current platform into a cache directory and relaunches the
- * helper with them on the classpath.  Later startups reuse the cached jars;
+ * helper with them on the classpath. Later startups reuse the cached jars;
  * pointing {@code --javafx-dir} at a pre-populated directory skips the
- * download entirely (offline machines).</p>
+ * download entirely (offline machines).
+ * </p>
  */
 public final class JavaFxBootstrap {
     /** The JavaFX modules HMCL Core touches; order defines the classpath. */
@@ -66,7 +68,7 @@ public final class JavaFxBootstrap {
 
     /**
      * Makes sure the JavaFX module jars exist under {@code directory} and
-     * returns them as a classpath fragment.  Present jars are reused without
+     * returns them as a classpath fragment. Present jars are reused without
      * contacting the repository; missing ones are downloaded and verified
      * against the repository's SHA-1 checksum.
      */
@@ -84,7 +86,7 @@ public final class JavaFxBootstrap {
     }
 
     private static void downloadModule(Path target, String module, String version, String classifier,
-                                       String repository) throws IOException {
+            String repository) throws IOException {
         String base = repository.replaceAll("/+$", "");
         String fileName = "javafx-" + module + "-" + version + "-" + classifier + ".jar";
         URI jarUri = URI.create(base + "/org/openjfx/javafx-" + module + "/" + version + "/" + fileName);
@@ -168,7 +170,7 @@ public final class JavaFxBootstrap {
 
     /**
      * Relaunches the helper with the helper JAR plus {@code classpath} and
-     * waits for it, forwarding the exit code.  The child inherits stdin and
+     * waits for it, forwarding the exit code. The child inherits stdin and
      * stdout, so the protocol pipes keep working across the restart.
      */
     public static int relaunch(Path helperJar, String classpath, List<String> args) throws IOException,

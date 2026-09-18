@@ -114,7 +114,8 @@ public final class ProtocolTest {
             Files.writeString(fallback.resolve("profile.json"), "{}", StandardCharsets.UTF_8);
             Files.createDirectories(repository.resolve("versions/without-manifest"));
 
-            List<InstanceDescriptor> instances = new top.fish1000.mcmcl.helper.repository.RepositoryInstanceCatalog(repository).list();
+            List<InstanceDescriptor> instances = new top.fish1000.mcmcl.helper.repository.RepositoryInstanceCatalog(
+                    repository).list();
             check(instances.size() == 4, "catalog should ignore directories without a manifest");
             check(instances.get(0).instanceId().equals("1.26.3"), "catalog should sort instance ids");
             check(instances.get(0).loader().isEmpty(), "vanilla manifest should report no loader");
@@ -142,7 +143,7 @@ public final class ProtocolTest {
         Map<String, Object> hello = findResponse(responses, "hello-1");
         check(hello != null, "hello response missing");
         check(hello.get("protocolVersion") instanceof Number protocolVersion
-                        && protocolVersion.intValue() == HelperBuildInfo.PROTOCOL_VERSION,
+                && protocolVersion.intValue() == HelperBuildInfo.PROTOCOL_VERSION,
                 "hello response has the wrong protocol version");
         check("hmcl-core".equals(hello.get("backend")), "hello response has the wrong backend");
         check(Boolean.TRUE.equals(hello.get("launchAvailable")),
@@ -203,10 +204,10 @@ public final class ProtocolTest {
         List<Map<String, Object>> messages = runLaunchInteraction(launchAdapter, "demo", launch);
         check(hasResponse(messages, "launch-1", true), "launch with options should be accepted");
         check(launchAdapter.lastRequest != null
-                        && "C:\\java\\bin\\java.exe".equals(launchAdapter.lastRequest.javaPath()),
+                && "C:\\java\\bin\\java.exe".equals(launchAdapter.lastRequest.javaPath()),
                 "javaPath should be forwarded to the adapter");
         check(launchAdapter.lastRequest != null
-                        && Integer.valueOf(4096).equals(launchAdapter.lastRequest.maxMemory()),
+                && Integer.valueOf(4096).equals(launchAdapter.lastRequest.maxMemory()),
                 "maxMemory should be forwarded to the adapter");
         check(launchAdapter.lastRequest != null && launchAdapter.lastRequest.versionIsolation(),
                 "versionIsolation should be forwarded to the adapter");
@@ -222,16 +223,16 @@ public final class ProtocolTest {
         InstallRecordingAdapter installer = new InstallRecordingAdapter(true, null, null);
         messages = run(installer,
                 "{\"id\":\"rv-1\",\"command\":\"remoteVersions\"}\n"
-                + "{\"id\":\"rv-2\",\"command\":\"remoteVersions\",\"component\":\"fabric\",\"gameVersion\":\"1.0\"}\n"
-                + "{\"id\":\"bad-rv\",\"command\":\"remoteVersions\",\"component\":\"fabric\"}\n"
-                + "{\"id\":\"bad-install\",\"command\":\"install\",\"instanceId\":\"demo\"}\n"
-                + "{\"id\":\"install-1\",\"command\":\"install\",\"instanceId\":\"demo\",\"gameVersion\":\"1.0\"}\n"
-                + "{\"id\":\"bad-loaders\",\"command\":\"install\",\"instanceId\":\"x\","
-                + "\"gameVersion\":\"1.0\",\"loaders\":[{\"type\":\"fabric\"}]}\n"
-                + "{\"id\":\"bad-loaders-2\",\"command\":\"install\",\"instanceId\":\"x\","
-                + "\"gameVersion\":\"1.0\",\"loaders\":\"nope\"}\n"
-                + "{\"id\":\"repair-1\",\"command\":\"repair\",\"instanceId\":\"other\"}\n"
-                + "{\"id\":\"stop-missing\",\"command\":\"stop\",\"instanceId\":\"none\"}\n");
+                        + "{\"id\":\"rv-2\",\"command\":\"remoteVersions\",\"component\":\"fabric\",\"gameVersion\":\"1.0\"}\n"
+                        + "{\"id\":\"bad-rv\",\"command\":\"remoteVersions\",\"component\":\"fabric\"}\n"
+                        + "{\"id\":\"bad-install\",\"command\":\"install\",\"instanceId\":\"demo\"}\n"
+                        + "{\"id\":\"install-1\",\"command\":\"install\",\"instanceId\":\"demo\",\"gameVersion\":\"1.0\"}\n"
+                        + "{\"id\":\"bad-loaders\",\"command\":\"install\",\"instanceId\":\"x\","
+                        + "\"gameVersion\":\"1.0\",\"loaders\":[{\"type\":\"fabric\"}]}\n"
+                        + "{\"id\":\"bad-loaders-2\",\"command\":\"install\",\"instanceId\":\"x\","
+                        + "\"gameVersion\":\"1.0\",\"loaders\":\"nope\"}\n"
+                        + "{\"id\":\"repair-1\",\"command\":\"repair\",\"instanceId\":\"other\"}\n"
+                        + "{\"id\":\"stop-missing\",\"command\":\"stop\",\"instanceId\":\"none\"}\n");
         Map<String, Object> remoteVersions = findResponse(messages, "rv-1");
         check(remoteVersions != null, "remoteVersions response missing");
         check(remoteVersions.get("versions") instanceof List<?> versions && versions.size() == 1,
@@ -257,7 +258,7 @@ public final class ProtocolTest {
         InstallRecordingAdapter installer2 = new InstallRecordingAdapter(true, installsEntered, null);
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         try (PrintStream stream = new PrintStream(bytes, true, StandardCharsets.UTF_8);
-             PipedWriter inputWriter = new PipedWriter()) {
+                PipedWriter inputWriter = new PipedWriter()) {
             PipedReader inputReader = new PipedReader(inputWriter);
             HelperServer server = new HelperServer(installer2, new JsonLineWriter(stream));
             AtomicReference<Throwable> failure = new AtomicReference<>();
@@ -299,10 +300,10 @@ public final class ProtocolTest {
         check(hasEventWithCode(messages, "demo", "exit", 0), "install exit event missing");
         check(hasResponse(messages, "install-loaders", true), "install with loaders should be accepted");
         check(installer2.lastInstallRequest != null
-                        && installer2.lastInstallRequest.loaders().size() == 1
-                        && "fabric".equals(installer2.lastInstallRequest.loaders().get(0).type())
-                        && "0.16.9".equals(installer2.lastInstallRequest.loaders().get(0).version())
-                        && installer2.lastInstallRequest.versionIsolation(),
+                && installer2.lastInstallRequest.loaders().size() == 1
+                && "fabric".equals(installer2.lastInstallRequest.loaders().get(0).type())
+                && "0.16.9".equals(installer2.lastInstallRequest.loaders().get(0).version())
+                && installer2.lastInstallRequest.versionIsolation(),
                 "loader components should reach the adapter");
     }
 
@@ -313,7 +314,7 @@ public final class ProtocolTest {
 
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         try (PrintStream stream = new PrintStream(bytes, true, StandardCharsets.UTF_8);
-             PipedWriter inputWriter = new PipedWriter()) {
+                PipedWriter inputWriter = new PipedWriter()) {
             PipedReader inputReader = new PipedReader(inputWriter);
             HelperServer server = new HelperServer(adapter, new JsonLineWriter(stream));
             AtomicReference<Throwable> failure = new AtomicReference<>();
@@ -369,7 +370,7 @@ public final class ProtocolTest {
             String launch) throws Exception {
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         try (PrintStream stream = new PrintStream(bytes, true, StandardCharsets.UTF_8);
-             PipedWriter inputWriter = new PipedWriter()) {
+                PipedWriter inputWriter = new PipedWriter()) {
             PipedReader inputReader = new PipedReader(inputWriter);
             HelperServer server = new HelperServer(adapter, new JsonLineWriter(stream));
             AtomicReference<Throwable> failure = new AtomicReference<>();
@@ -439,7 +440,7 @@ public final class ProtocolTest {
                     directory, "25", "win", "http://127.0.0.1:" + server.getAddress().getPort());
             check(classpath.split(java.io.File.pathSeparator).length == 3,
                     "bootstrap classpath should contain three modules");
-            for (String module : new String[]{"base", "graphics", "controls"}) {
+            for (String module : new String[] { "base", "graphics", "controls" }) {
                 check(Files.isRegularFile(directory.resolve("javafx-" + module + ".jar")),
                         "javafx-" + module + " jar was not provisioned");
             }
@@ -482,18 +483,18 @@ public final class ProtocolTest {
     private static void mainParsesJavaFxArguments() throws Exception {
         Path repository = Files.createTempDirectory("mcmcl-helper-args-");
         try {
-            Main.HelperArgs args = Main.parseHelperArgs(new String[]{
+            Main.HelperArgs args = Main.parseHelperArgs(new String[] {
                     "--repository", repository.toString(),
                     "--download-provider", "bmclapi",
                     "--javafx-version", "21",
                     "--javafx-dir", "fx",
-                    "--javafx-repo", "http://mirror/maven"});
+                    "--javafx-repo", "http://mirror/maven" });
             check("bmclapi".equals(args.downloadProvider()), "download provider should parse");
             check("21".equals(args.javafxVersion()), "javafx version should parse");
             check(args.javafxDirectory().endsWith("fx"), "javafx dir should parse");
             check("http://mirror/maven".equals(args.javafxRepository()), "javafx repo should parse");
 
-            Main.HelperArgs defaults = Main.parseHelperArgs(new String[]{"--repository", repository.toString()});
+            Main.HelperArgs defaults = Main.parseHelperArgs(new String[] { "--repository", repository.toString() });
             check("mojang".equals(defaults.downloadProvider()), "download provider default");
             check(JavaFxBootstrap.DEFAULT_VERSION.equals(defaults.javafxVersion()), "javafx version default");
             check(defaults.javafxDirectory().equals(Main.defaultJavaFxDirectory()),
@@ -507,7 +508,7 @@ public final class ProtocolTest {
         }
 
         try {
-            Main.parseHelperArgs(new String[]{"--repository", ".", "--download-provider", "nope"});
+            Main.parseHelperArgs(new String[] { "--repository", ".", "--download-provider", "nope" });
             check(false, "invalid download provider should be rejected");
         } catch (IllegalArgumentException expected) {
             // argument validation
@@ -570,7 +571,7 @@ public final class ProtocolTest {
             check(logs.stream().anyMatch(line -> line.contains("fixture-stderr")),
                     "stderr was not bridged through HMCL Core: " + logs);
             check(logs.stream().anyMatch(line -> line.contains(
-                            "fixture-cwd=" + instanceRoot.toAbsolutePath().normalize())),
+                    "fixture-cwd=" + instanceRoot.toAbsolutePath().normalize())),
                     "version isolation did not use the instance directory: " + logs);
             adapter.shutdown();
         } finally {
@@ -597,13 +598,13 @@ public final class ProtocolTest {
         String embedded = System.getProperty("mcmcl.helper.embedded");
         System.setProperty("mcmcl.helper.embedded", "true");
         try (PrintStream protocol = new PrintStream(protocolBytes, true, StandardCharsets.UTF_8);
-             PrintStream diagnostics = new PrintStream(diagnosticsBytes, true, StandardCharsets.UTF_8)) {
+                PrintStream diagnostics = new PrintStream(diagnosticsBytes, true, StandardCharsets.UTF_8)) {
             System.setIn(new ByteArrayInputStream(("{\"id\":\"list\",\"command\":\"list\"}\n"
                     + "{\"id\":\"shutdown\",\"command\":\"shutdown\"}\n")
                     .getBytes(StandardCharsets.UTF_8)));
             System.setOut(protocol);
             System.setErr(diagnostics);
-            Main.main(new String[]{"--repository", repository.toString()});
+            Main.main(new String[] { "--repository", repository.toString() });
         } finally {
             System.setIn(originalIn);
             System.setOut(originalOut);
@@ -676,7 +677,7 @@ public final class ProtocolTest {
                 // endpoints, then launching it, exercises the loader chain.
                 RecordingSink fabricSink = new RecordingSink();
                 adapter.install(new HmclInstallRequest("fabric-demo", "fixture-vanilla",
-                                List.of(new HmclInstallRequest.ComponentSpec("fabric", "0.16.9")), true),
+                        List.of(new HmclInstallRequest.ComponentSpec("fabric", "0.16.9")), true),
                         fabricSink);
                 check(fabricSink.exit.get(120, TimeUnit.SECONDS) == 0,
                         "fabric install did not finish: " + fabricSink.error.get() + " logs: " + fabricSink.logs);
@@ -697,7 +698,7 @@ public final class ProtocolTest {
                 check(fabricLaunchSink.logs.stream().anyMatch(line -> line.contains("fixture-stdout")),
                         "fabric instance stdout was not bridged: " + fabricLaunchSink.logs);
                 check(fabricLaunchSink.logs.stream().anyMatch(line -> line.contains(
-                                "fixture-cwd=" + repository.resolve("versions/fabric-demo").toAbsolutePath().normalize())),
+                        "fixture-cwd=" + repository.resolve("versions/fabric-demo").toAbsolutePath().normalize())),
                         "fabric version isolation did not use the instance directory: " + fabricLaunchSink.logs);
                 adapter.shutdown();
 
@@ -825,7 +826,7 @@ public final class ProtocolTest {
         String className = "top/fish1000/mcmcl/helper/LaunchFixtureMain.class";
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         try (InputStream input = LaunchFixtureMain.class.getResourceAsStream("/" + className);
-             JarOutputStream output = new JarOutputStream(bytes)) {
+                JarOutputStream output = new JarOutputStream(bytes)) {
             check(input != null, "fixture class is not available on the test classpath");
             output.putNextEntry(new JarEntry(className));
             input.transferTo(output);
@@ -847,7 +848,8 @@ public final class ProtocolTest {
                 && code.equals(message.get("code")));
     }
 
-    private static boolean hasEventWithCode(List<Map<String, Object>> messages, String instanceId, String event, Object code) {
+    private static boolean hasEventWithCode(List<Map<String, Object>> messages, String instanceId, String event,
+            Object code) {
         return messages.stream().anyMatch(message -> "event".equals(message.get("type"))
                 && instanceId.equals(message.get("instanceId"))
                 && event.equals(message.get("event"))

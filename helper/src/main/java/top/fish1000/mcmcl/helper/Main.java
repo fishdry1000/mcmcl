@@ -39,7 +39,7 @@ public final class Main {
             HelperArgs helperArgs = parseHelperArgs(args);
 
             // The HMCL profile deliberately does not bundle the
-            // platform-specific JavaFX modules.  Like HMCL's own bootstrap,
+            // platform-specific JavaFX modules. Like HMCL's own bootstrap,
             // provision them once and relaunch with them on the classpath.
             if (HelperBuildInfo.hmclProfile()
                     && !JavaFxBootstrap.isJavaFxAvailable()
@@ -90,7 +90,7 @@ public final class Main {
         }
 
         // The JavaFX toolkit keeps a non-daemon thread alive, so the
-        // standalone helper must terminate the JVM explicitly.  In-process
+        // standalone helper must terminate the JVM explicitly. In-process
         // callers (the protocol tests) set mcmcl.helper.embedded to keep
         // control of the JVM.
         if (!Boolean.getBoolean("mcmcl.helper.embedded")) {

@@ -29,9 +29,13 @@ import net.minecraft.client.User;
 /**
  * Client for the standalone HMCL helper process.
  *
- * <p>The helper owns repository loading, launch preparation and game launching for an already
- * prepared HMCL repository. This class only transports JSON Lines requests and events, so HMCL
- * dependencies never enter the NeoForge class loader.</p>
+ * <p>
+ * The helper owns repository loading, launch preparation and game launching for
+ * an already
+ * prepared HMCL repository. This class only transports JSON Lines requests and
+ * events, so HMCL
+ * dependencies never enter the NeoForge class loader.
+ * </p>
  */
 public final class HmclHelperClient implements AutoCloseable {
     private static final int PROTOCOL_VERSION = 1;
@@ -68,7 +72,8 @@ public final class HmclHelperClient implements AutoCloseable {
     }
 
     /**
-     * Fetches remote versions; with a non-blank {@code component} this returns the loader versions
+     * Fetches remote versions; with a non-blank {@code component} this returns the
+     * loader versions
      * offered for that component on top of {@code gameVersion}.
      */
     public CompletableFuture<List<RemoteVersion>> remoteVersions(String component, String gameVersion)
@@ -108,8 +113,7 @@ public final class HmclHelperClient implements AutoCloseable {
             user.getXuid().ifPresent(value -> request.addProperty("xuid", value));
         }
 
-        InstanceSettingsStore.Settings overrides =
-                InstanceSettingsStore.read(this.repositoryDirectory, instance.id());
+        InstanceSettingsStore.Settings overrides = InstanceSettingsStore.read(this.repositoryDirectory, instance.id());
         String javaPath = overrides.javaPath().isBlank() ? Config.JAVA_PATH.get() : overrides.javaPath();
         if (!javaPath.isBlank()) {
             request.addProperty("javaPath", javaPath);
@@ -152,14 +156,18 @@ public final class HmclHelperClient implements AutoCloseable {
         return handle != null && !handle.exitCode().isDone();
     }
 
-    /** Starts installing {@code gameVersion} into a new instance and reports progress through {@code logSink}. */
+    /**
+     * Starts installing {@code gameVersion} into a new instance and reports
+     * progress through {@code logSink}.
+     */
     public InstallHandle install(String instanceId, String gameVersion, Consumer<String> logSink)
             throws IOException {
         return install(instanceId, gameVersion, List.of(), logSink);
     }
 
     /**
-     * Starts installing {@code gameVersion} into a new instance with the given mod loaders layered
+     * Starts installing {@code gameVersion} into a new instance with the given mod
+     * loaders layered
      * on top and reports progress through {@code logSink}.
      */
     public InstallHandle install(
@@ -170,7 +178,10 @@ public final class HmclHelperClient implements AutoCloseable {
         return startInstall("install", instanceId, gameVersion, loaders, logSink);
     }
 
-    /** Starts repairing an existing instance; accepted and terminal events mirror {@link #install}. */
+    /**
+     * Starts repairing an existing instance; accepted and terminal events mirror
+     * {@link #install}.
+     */
     public InstallHandle repair(String instanceId, Consumer<String> logSink) throws IOException {
         return startInstall("repair", instanceId, null, List.of(), logSink);
     }
@@ -288,7 +299,10 @@ public final class HmclHelperClient implements AutoCloseable {
         });
     }
 
-    /** Sends on the current process, optionally requiring a specific process identity. */
+    /**
+     * Sends on the current process, optionally requiring a specific process
+     * identity.
+     */
     private CompletableFuture<JsonObject> sendToProcess(JsonObject request, Process expectedProcess)
             throws IOException {
         String requestId = UUID.randomUUID().toString();
@@ -365,15 +379,14 @@ public final class HmclHelperClient implements AutoCloseable {
             Files.createDirectories(workingDirectory);
 
             ProcessBuilder builder = new ProcessBuilder(
-                     currentJavaExecutable().toString(),
+                    currentJavaExecutable().toString(),
                     "--enable-native-access=ALL-UNNAMED",
-                     "-jar",
-                     helperJar.toString(),
+                    "-jar",
+                    helperJar.toString(),
                     "--repository",
-                     repositoryDirectory.toString(),
+                    repositoryDirectory.toString(),
                     "--javafx-dir",
-                     helperJar.resolveSibling("javafx").toString()
-            );
+                    helperJar.resolveSibling("javafx").toString());
             String downloadProvider = Config.DOWNLOAD_PROVIDER.get();
             if ("mojang".equals(downloadProvider) || "bmclapi".equals(downloadProvider)) {
                 builder.command().addAll(List.of("--download-provider", downloadProvider));
@@ -381,12 +394,13 @@ public final class HmclHelperClient implements AutoCloseable {
             builder.directory(workingDirectory.toFile());
             startedProcess = builder.start();
             process = startedProcess;
-            writer = new BufferedWriter(new OutputStreamWriter(startedProcess.getOutputStream(), StandardCharsets.UTF_8));
+            writer = new BufferedWriter(
+                    new OutputStreamWriter(startedProcess.getOutputStream(), StandardCharsets.UTF_8));
             readiness = new CompletableFuture<>();
             ready = readiness;
             helperInfo = null;
 
-            // Bind each reader to the process it was created for.  Looking up
+            // Bind each reader to the process it was created for. Looking up
             // the volatile field inside the reader would let a delayed old
             // reader consume bytes from a freshly restarted helper.
             Thread.ofVirtual().name("mcmcl-hmcl-helper-reader").start(
@@ -538,8 +552,7 @@ public final class HmclHelperClient implements AutoCloseable {
                 string(response, "helperVersion", "unknown"),
                 string(response, "backend", "unknown"),
                 bool(response, "launchAvailable", false),
-                string(response, "hmclCommit", "unknown")
-        );
+                string(response, "hmclCommit", "unknown"));
     }
 
     private List<HmclInstance> parseInstances(JsonObject response) {
@@ -562,8 +575,7 @@ public final class HmclHelperClient implements AutoCloseable {
                         name,
                         version,
                         loader,
-                        root
-                ));
+                        root));
             }
             return List.copyOf(result);
         } catch (IOException exception) {
@@ -584,8 +596,7 @@ public final class HmclHelperClient implements AutoCloseable {
                 result.add(new RemoteVersion(
                         string(version, "id", ""),
                         string(version, "type", ""),
-                        string(version, "releaseTime", "")
-                ));
+                        string(version, "releaseTime", "")));
             }
             return List.copyOf(result);
         } catch (IOException exception) {
@@ -770,7 +781,10 @@ public final class HmclHelperClient implements AutoCloseable {
             CompletableFuture<Integer> exitCode) {
     }
 
-    /** Tracks one accepted install/repair request; {@code completion} gets the process exit code. */
+    /**
+     * Tracks one accepted install/repair request; {@code completion} gets the
+     * process exit code.
+     */
     public record InstallHandle(String instanceId, CompletableFuture<Integer> completion) {
     }
 

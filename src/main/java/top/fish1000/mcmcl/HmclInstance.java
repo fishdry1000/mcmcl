@@ -5,11 +5,13 @@ import java.util.regex.Pattern;
 
 /**
  * A small UI-facing description of an instance discovered by the HMCL helper.
- * {@code loader} is empty for vanilla instances; {@code root} is the helper-reported
+ * {@code loader} is empty for vanilla instances; {@code root} is the
+ * helper-reported
  * instance directory (empty when the helper did not provide one).
  */
 public record HmclInstance(String id, String name, String version, String loader, String root) {
-    private static final Pattern LEGACY_SNAPSHOT = Pattern.compile("\\d{2}w\\d{2}[a-z](?:_unobfuscated| unobfuscated)?");
+    private static final Pattern LEGACY_SNAPSHOT = Pattern
+            .compile("\\d{2}w\\d{2}[a-z](?:_unobfuscated| unobfuscated)?");
 
     public HmclInstance {
         if (!isSafeId(id)) {
@@ -21,7 +23,10 @@ public record HmclInstance(String id, String name, String version, String loader
         root = root == null ? "" : root;
     }
 
-    /** Whether the id is a non-blank path segment the repository layout can use as a directory name. */
+    /**
+     * Whether the id is a non-blank path segment the repository layout can use as a
+     * directory name.
+     */
     public static boolean isSafeId(String id) {
         return id != null && !id.isBlank()
                 && !id.equals(".")
@@ -31,7 +36,9 @@ public record HmclInstance(String id, String name, String version, String loader
                 && id.indexOf('\u0000') < 0;
     }
 
-    /** Whether the instance carries a mod loader, so a mods folder is meaningful. */
+    /**
+     * Whether the instance carries a mod loader, so a mods folder is meaningful.
+     */
     public boolean hasModLoader() {
         return !loader.isBlank();
     }

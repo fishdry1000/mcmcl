@@ -15,7 +15,8 @@ public final class Config {
             .define("instancesDirectory", "mcmcl/hmcl");
 
     public static final ModConfigSpec.ConfigValue<String> HMCL_HELPER_JAR = BUILDER
-            .comment("Path to the standalone HMCL helper JAR. Relative paths are resolved from the Minecraft game directory.")
+            .comment(
+                    "Path to the standalone HMCL helper JAR. Relative paths are resolved from the Minecraft game directory.")
             .define("hmclHelperJar", "mcmcl/hmcl-helper.jar");
 
     public static final ModConfigSpec.IntValue MAX_INSTANCES = BUILDER

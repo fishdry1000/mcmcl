@@ -6,7 +6,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/** Small dependency-free JSON parser/writer for the JSON Lines control plane. */
+/**
+ * Small dependency-free JSON parser/writer for the JSON Lines control plane.
+ */
 public final class Json {
     private Json() {
     }

@@ -25,13 +25,19 @@ public final class InstallScreen extends Screen {
     private static final int HEADER_HEIGHT = 8 + 9 + 8 + 20 + 4;
     /** Status line, helper log line and two rows of footer buttons. */
     private static final int FOOTER_HEIGHT = 78;
-    /** Loader ids offered by the cycle button, in cycle order; {@code null} means plain vanilla. */
-    private static final String[] LOADER_CYCLE = {null, "fabric", "forge", "neoforge", "quilt", "optifine"};
+    /**
+     * Loader ids offered by the cycle button, in cycle order; {@code null} means
+     * plain vanilla.
+     */
+    private static final String[] LOADER_CYCLE = { null, "fabric", "forge", "neoforge", "quilt", "optifine" };
     private static final int SMALL_BUTTON_WIDTH = 71;
     /** Two 20px button rows plus their 4px spacing. */
     private static final int FOOTER_BUTTON_ROWS = 44;
     private static final int FOOTER_BOTTOM_PADDING = 4;
-    /** Cache key of the game version list; loader lists use {@code loader/gameVersion}. */
+    /**
+     * Cache key of the game version list; loader lists use
+     * {@code loader/gameVersion}.
+     */
     private static final String GAME_VERSIONS_CACHE_KEY = "";
 
     private final Screen parent;
@@ -79,9 +85,7 @@ public final class InstallScreen extends Screen {
                         200,
                         20,
                         this.searchBox,
-                        Component.translatable("screen.minecraftminecraftlauncher.search")
-                )
-        );
+                        Component.translatable("screen.minecraftminecraftlauncher.search")));
         this.searchBox.setResponder(value -> {
             if (this.list != null) {
                 this.list.updateFilter(value);
@@ -89,8 +93,7 @@ public final class InstallScreen extends Screen {
         });
         this.searchBox.setHint(
                 Component.translatable("screen.minecraftminecraftlauncher.install.search")
-                        .setStyle(EditBox.SEARCH_HINT_STYLE)
-        );
+                        .setStyle(EditBox.SEARCH_HINT_STYLE));
         if (!this.inLoaderMode()) {
             // The type filter only makes sense for the game version list;
             // loader version rows share one release type.
@@ -109,9 +112,7 @@ public final class InstallScreen extends Screen {
                                         if (this.list != null) {
                                             this.list.setTypeFilter(value);
                                         }
-                                    }
-                            )
-            );
+                                    }));
         }
 
         this.list = this.layout.addToContents(
@@ -127,9 +128,7 @@ public final class InstallScreen extends Screen {
                         Component.translatable("screen.minecraftminecraftlauncher.install.empty"),
                         ignored -> this.updateFooterButtons(),
                         version -> this.primaryAction(),
-                        this.list
-                )
-        );
+                        this.list));
         this.createFooterButtons();
         this.layout.visitWidgets(this::addRenderableWidget);
         this.repositionElements();
@@ -144,52 +143,44 @@ public final class InstallScreen extends Screen {
     private Component loadingLabel() {
         return Component.translatable(this.inLoaderMode()
                 ? "screen.minecraftminecraftlauncher.install.loading_loader"
-                : "screen.minecraftminecraftlauncher.install.loading"
-        );
+                : "screen.minecraftminecraftlauncher.install.loading");
     }
 
     private void createFooterButtons() {
         // Everything lives in the layout so a window resize (and the step
-        // switch's rebuildWidgets) repositions the rows cleanly.  The back
+        // switch's rebuildWidgets) repositions the rows cleanly. The back
         // action stays in the same slot on every screen: last button of the
         // small row, like the vanilla world screen.
         LinearLayout footerColumn = this.layout.addToFooter(
                 LinearLayout.vertical().spacing(4),
-                settings -> settings.align(0.5F, 1.0F).paddingBottom(FOOTER_BOTTOM_PADDING)
-        );
+                settings -> settings.align(0.5F, 1.0F).paddingBottom(FOOTER_BOTTOM_PADDING));
         LinearLayout primaryRow = footerColumn.addChild(
                 LinearLayout.horizontal().spacing(8),
-                settings -> settings.alignHorizontallyCenter()
-        );
+                settings -> settings.alignHorizontallyCenter());
         this.primaryButton = primaryRow.addChild(Button.builder(
                 Component.empty(),
-                button -> this.primaryAction()
-        ).build());
+                button -> this.primaryAction()).build());
 
         LinearLayout secondaryRow = footerColumn.addChild(
                 LinearLayout.horizontal().spacing(8),
-                settings -> settings.alignHorizontallyCenter()
-        );
+                settings -> settings.alignHorizontallyCenter());
         if (this.inLoaderMode()) {
             secondaryRow.addChild(this.refreshButton());
         } else {
             this.loaderButton = secondaryRow.addChild(Button.builder(
                     Component.empty(),
-                    button -> this.cycleLoader()
-            ).width(100).build());
+                    button -> this.cycleLoader()).width(100).build());
             secondaryRow.addChild(this.refreshButton());
         }
         secondaryRow.addChild(Button.builder(
                 Component.translatable("screen.minecraftminecraftlauncher.install.back"),
-                button -> this.back()
-        ).width(SMALL_BUTTON_WIDTH).build());
+                button -> this.back()).width(SMALL_BUTTON_WIDTH).build());
     }
 
     private Button refreshButton() {
         return Button.builder(
                 Component.translatable("screen.minecraftminecraftlauncher.refresh"),
-                button -> this.refreshCurrentVersions()
-        ).width(SMALL_BUTTON_WIDTH).build();
+                button -> this.refreshCurrentVersions()).width(SMALL_BUTTON_WIDTH).build();
     }
 
     @Override
@@ -222,15 +213,15 @@ public final class InstallScreen extends Screen {
         boolean hasLog = !this.latestLog.isBlank();
         int blockHeight = hasLog ? 19 : 9;
         int statusY = bandTop + (band - blockHeight) / 2;
-        graphics.centeredText(this.font, this.status, this.width / 2, statusY, this.statusError ? 0xFFFF7777 : 0xFFB8E0FF);
+        graphics.centeredText(this.font, this.status, this.width / 2, statusY,
+                this.statusError ? 0xFFFF7777 : 0xFFB8E0FF);
         if (hasLog) {
             graphics.centeredText(
                     this.font,
                     this.font.plainSubstrByWidth(this.latestLog, this.width - 24),
                     this.width / 2,
                     statusY + 10,
-                    0xFFCCCCCC
-            );
+                    0xFFCCCCCC);
         }
     }
 
@@ -239,7 +230,10 @@ public final class InstallScreen extends Screen {
         this.minecraft.setScreenAndShow(this.parent);
     }
 
-    /** Step one's back button leaves the screen; step two's goes back to the game version list. */
+    /**
+     * Step one's back button leaves the screen; step two's goes back to the game
+     * version list.
+     */
     private void back() {
         if (this.inLoaderMode()) {
             this.leaveLoaderMode();
@@ -278,8 +272,7 @@ public final class InstallScreen extends Screen {
                     instanceId,
                     this.loaderGameVersion,
                     List.of(new HmclHelperClient.LoaderSpec(this.selectedLoader, selected.id())),
-                    selected.id()
-            );
+                    selected.id());
         } else {
             this.startInstall(instanceId, selected.id(), List.of(), selected.id());
         }
@@ -289,8 +282,7 @@ public final class InstallScreen extends Screen {
             String instanceId,
             String gameVersion,
             List<HmclHelperClient.LoaderSpec> loaders,
-            String displayName
-    ) {
+            String displayName) {
         HmclHelperClient helper = InstanceManager.helper(this.minecraft);
         this.latestLog = "";
         this.status = Component.translatable(
@@ -332,8 +324,7 @@ public final class InstallScreen extends Screen {
                         this.status = Component.translatable(
                                 "screen.minecraftminecraftlauncher.install.install_exit_code",
                                 displayName,
-                                exitCode
-                        );
+                                exitCode);
                         this.statusError = true;
                     }
                     this.updateFooterButtons();
@@ -450,7 +441,10 @@ public final class InstallScreen extends Screen {
         });
     }
 
-    /** Loader version variant of {@link #refreshVersions(boolean)}; cached per loader and game version. */
+    /**
+     * Loader version variant of {@link #refreshVersions(boolean)}; cached per
+     * loader and game version.
+     */
     private void fetchLoaderVersions(boolean force) {
         HmclHelperClient helper = InstanceManager.helper(this.minecraft);
         if (this.rejectUnavailable(helper)) {
@@ -539,7 +533,10 @@ public final class InstallScreen extends Screen {
         });
     }
 
-    /** Marks the screen unavailable (and returns true) when the helper cannot install. */
+    /**
+     * Marks the screen unavailable (and returns true) when the helper cannot
+     * install.
+     */
     private boolean rejectUnavailable(HmclHelperClient helper) {
         HmclHelperClient.HelperInfo info = helper.helperInfo();
         if (info == null || !info.launchAvailable()) {
@@ -566,8 +563,7 @@ public final class InstallScreen extends Screen {
         this.loaderGameVersion = version.id();
         this.headerTitle = Component.translatable(
                 "screen.minecraftminecraftlauncher.install.loader_for",
-                version.id() + " · " + loaderLabel(this.selectedLoader).getString()
-        );
+                version.id() + " · " + loaderLabel(this.selectedLoader).getString());
         this.versions = List.of();
         this.fetchLoaderVersions(false);
         this.rebuildWidgets();
@@ -597,12 +593,18 @@ public final class InstallScreen extends Screen {
         return this.inLoaderMode() ? this.loaderInstanceId() : version.id();
     }
 
-    /** Loader installs live in a dedicated instance named after the game version and loader. */
+    /**
+     * Loader installs live in a dedicated instance named after the game version and
+     * loader.
+     */
     private String loaderInstanceId() {
         return this.loaderGameVersion + "-" + this.selectedLoader;
     }
 
-    /** Mirrors the vanilla world screen: the primary button reflects the selection's state. */
+    /**
+     * Mirrors the vanilla world screen: the primary button reflects the selection's
+     * state.
+     */
     private void updateFooterButtons() {
         HmclHelperClient helper = InstanceManager.helper(this.minecraft);
         HmclHelperClient.HelperInfo info = helper.helperInfo();
@@ -614,15 +616,13 @@ public final class InstallScreen extends Screen {
                     ? "screen.minecraftminecraftlauncher.install.cancel"
                     : this.inLoaderMode()
                             ? "screen.minecraftminecraftlauncher.install.install"
-                            : "screen.minecraftminecraftlauncher.install.next"
-            ));
+                            : "screen.minecraftminecraftlauncher.install.next"));
             this.primaryButton.active = installing || (selected != null && installAvailable);
         }
         if (this.loaderButton != null) {
             this.loaderButton.setMessage(Component.translatable(
                     "screen.minecraftminecraftlauncher.install.loader_prefix",
-                    loaderLabel(this.selectedLoader)
-            ));
+                    loaderLabel(this.selectedLoader)));
         }
     }
 

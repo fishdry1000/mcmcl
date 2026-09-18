@@ -15,7 +15,7 @@ import net.minecraft.network.chat.Component;
 /**
  * Per-instance settings editor: rename plus launch overrides, mirroring the
  * vanilla settings screen structure with labelled fields between the header
- * and the save/cancel footer.  Blank launch values fall back to the global
+ * and the save/cancel footer. Blank launch values fall back to the global
  * client configuration at launch time.
  */
 public final class InstanceEditScreen extends Screen {
@@ -34,8 +34,7 @@ public final class InstanceEditScreen extends Screen {
     private EditBox idBox;
     private EditBox javaPathBox;
     private EditBox maxMemoryBox;
-    private InstanceSettingsStore.VersionIsolationOverride versionIsolation =
-            InstanceSettingsStore.VersionIsolationOverride.INHERIT;
+    private InstanceSettingsStore.VersionIsolationOverride versionIsolation = InstanceSettingsStore.VersionIsolationOverride.INHERIT;
     private StringWidget statusWidget;
     private boolean valuesLoaded;
 
@@ -63,14 +62,16 @@ public final class InstanceEditScreen extends Screen {
         fields.defaultCellSetting().alignHorizontallyLeft();
 
         LinearLayout idGroup = fields.addChild(LinearLayout.vertical().spacing(2));
-        idGroup.addChild(new StringWidget(Component.translatable("screen.minecraftminecraftlauncher.edit.id"), this.font));
+        idGroup.addChild(
+                new StringWidget(Component.translatable("screen.minecraftminecraftlauncher.edit.id"), this.font));
         this.idBox = idGroup.addChild(new EditBox(
                 this.font, 0, 0, FIELD_WIDTH, 20, this.idBox,
                 Component.translatable("screen.minecraftminecraftlauncher.edit.id")));
         this.idBox.setMaxLength(64);
 
         LinearLayout javaGroup = fields.addChild(LinearLayout.vertical().spacing(2));
-        javaGroup.addChild(new StringWidget(Component.translatable("screen.minecraftminecraftlauncher.edit.java_path"), this.font));
+        javaGroup.addChild(new StringWidget(Component.translatable("screen.minecraftminecraftlauncher.edit.java_path"),
+                this.font));
         this.javaPathBox = javaGroup.addChild(new EditBox(
                 this.font, 0, 0, FIELD_WIDTH, 20, this.javaPathBox,
                 Component.translatable("screen.minecraftminecraftlauncher.edit.java_path")));
@@ -78,7 +79,8 @@ public final class InstanceEditScreen extends Screen {
         this.javaPathBox.setHint(Component.translatable("screen.minecraftminecraftlauncher.edit.global_hint"));
 
         LinearLayout memoryGroup = fields.addChild(LinearLayout.vertical().spacing(2));
-        memoryGroup.addChild(new StringWidget(Component.translatable("screen.minecraftminecraftlauncher.edit.max_memory"), this.font));
+        memoryGroup.addChild(new StringWidget(
+                Component.translatable("screen.minecraftminecraftlauncher.edit.max_memory"), this.font));
         this.maxMemoryBox = memoryGroup.addChild(new EditBox(
                 this.font, 0, 0, FIELD_WIDTH, 20, this.maxMemoryBox,
                 Component.translatable("screen.minecraftminecraftlauncher.edit.max_memory")));
@@ -96,9 +98,7 @@ public final class InstanceEditScreen extends Screen {
                                 FIELD_WIDTH,
                                 20,
                                 Component.translatable("screen.minecraftminecraftlauncher.edit.version_isolation"),
-                                (button, value) -> this.versionIsolation = value
-                        )
-        );
+                                (button, value) -> this.versionIsolation = value));
 
         this.statusWidget = fields.addChild(new StringWidget(Component.empty(), this.font));
 
@@ -117,20 +117,16 @@ public final class InstanceEditScreen extends Screen {
     private void createFooterButtons() {
         LinearLayout footerColumn = this.layout.addToFooter(
                 LinearLayout.vertical().spacing(4),
-                settings -> settings.align(0.5F, 1.0F).paddingBottom(FOOTER_BOTTOM_PADDING)
-        );
+                settings -> settings.align(0.5F, 1.0F).paddingBottom(FOOTER_BOTTOM_PADDING));
         LinearLayout primaryRow = footerColumn.addChild(
                 LinearLayout.horizontal().spacing(8),
-                settings -> settings.alignHorizontallyCenter()
-        );
+                settings -> settings.alignHorizontallyCenter());
         primaryRow.addChild(Button.builder(
                 Component.translatable("screen.minecraftminecraftlauncher.edit.save"),
-                button -> this.save()
-        ).build());
+                button -> this.save()).build());
         LinearLayout secondaryRow = footerColumn.addChild(
                 LinearLayout.horizontal().spacing(8),
-                settings -> settings.alignHorizontallyCenter()
-        );
+                settings -> settings.alignHorizontallyCenter());
         secondaryRow.addChild(Button.builder(CommonComponents.GUI_CANCEL, button -> this.onClose())
                 .width(71).build());
     }
@@ -175,15 +171,17 @@ public final class InstanceEditScreen extends Screen {
                 InstanceManager.instancesDirectory(this.minecraft),
                 newId,
                 new InstanceSettingsStore.Settings(
-                        this.javaPathBox.getValue().strip(), maxMemory, this.versionIsolation)
-        );
+                        this.javaPathBox.getValue().strip(), maxMemory, this.versionIsolation));
         if (renamed && this.onChanged != null) {
             this.onChanged.run();
         }
         this.minecraft.setScreenAndShow(this.parent);
     }
 
-    /** Returns the parsed memory override, or -1 (after flagging the box red) when invalid. */
+    /**
+     * Returns the parsed memory override, or -1 (after flagging the box red) when
+     * invalid.
+     */
     private int parseMemory() {
         String memoryText = this.maxMemoryBox.getValue().strip();
         if (memoryText.isEmpty()) {

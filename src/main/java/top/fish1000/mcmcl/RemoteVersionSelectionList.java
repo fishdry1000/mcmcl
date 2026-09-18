@@ -26,14 +26,15 @@ import net.minecraft.util.Util;
 /**
  * Remote version list sharing the vanilla world-selection styling with
  * {@link InstanceSelectionList}: 36px rows with an icon, the version id and
- * a grey type line, a text filter, and loading/empty placeholders.  Icons
+ * a grey type line, a text filter, and loading/empty placeholders. Icons
  * mirror HMCL's version page (grass for releases, command block for
  * snapshots, crafting table for old versions, per-loader marks otherwise).
  */
 public final class RemoteVersionSelectionList extends ObjectSelectionList<RemoteVersionSelectionList.Entry> {
     private static final String ICON_PATH_PREFIX = "textures/gui/version/";
     private static final Identifier JOIN_SPRITE = Identifier.withDefaultNamespace("world_list/join");
-    private static final Identifier JOIN_HIGHLIGHTED_SPRITE = Identifier.withDefaultNamespace("world_list/join_highlighted");
+    private static final Identifier JOIN_HIGHLIGHTED_SPRITE = Identifier
+            .withDefaultNamespace("world_list/join_highlighted");
     private static final int ICON_SIZE = 32;
     private static final int TEXT_OFFSET = ICON_SIZE + 3;
     private static final int INFO_COLOR = 0xFF808080;
@@ -59,8 +60,7 @@ public final class RemoteVersionSelectionList extends ObjectSelectionList<Remote
     private static Identifier modIcon(String name) {
         return Identifier.fromNamespaceAndPath(
                 MinecraftMinecraftLauncher.MODID,
-                ICON_PATH_PREFIX + name + ".png"
-        );
+                ICON_PATH_PREFIX + name + ".png");
     }
 
     private final Screen screen;
@@ -85,8 +85,7 @@ public final class RemoteVersionSelectionList extends ObjectSelectionList<Remote
             Component emptyLabel,
             Consumer<HmclHelperClient.RemoteVersion> onEntrySelect,
             Consumer<HmclHelperClient.RemoteVersion> onEntryInteract,
-            RemoteVersionSelectionList oldList
-    ) {
+            RemoteVersionSelectionList oldList) {
         super(minecraft, width, height, 0, 36);
         this.screen = screen;
         this.iconProvider = iconProvider;
@@ -105,7 +104,10 @@ public final class RemoteVersionSelectionList extends ObjectSelectionList<Remote
         return 270;
     }
 
-    /** Replaces the shown versions; while {@code loading} a spinner entry is shown instead. */
+    /**
+     * Replaces the shown versions; while {@code loading} a spinner entry is shown
+     * instead.
+     */
     public void setVersions(List<HmclHelperClient.RemoteVersion> versions, boolean loading) {
         this.versions.clear();
         this.versions.addAll(versions);
@@ -182,7 +184,10 @@ public final class RemoteVersionSelectionList extends ObjectSelectionList<Remote
     public abstract static class Entry extends ObjectSelectionList.Entry<RemoteVersionSelectionList.Entry> {
     }
 
-    /** Centered single- or two-line notice used for loading (with animated dots) and empty states. */
+    /**
+     * Centered single- or two-line notice used for loading (with animated dots) and
+     * empty states.
+     */
     private final class MessageEntry extends Entry {
         private final Component label;
         private final boolean withDots;
@@ -265,19 +270,18 @@ public final class RemoteVersionSelectionList extends ObjectSelectionList<Remote
                     ICON_SIZE,
                     ICON_SIZE,
                     ICON_SIZE,
-                    ICON_SIZE
-            );
+                    ICON_SIZE);
             if (hovered) {
                 graphics.fill(
                         this.getContentX(),
                         this.getContentY(),
                         this.getContentX() + ICON_SIZE,
                         this.getContentY() + ICON_SIZE,
-                        HOVER_OVERLAY_COLOR
-                );
+                        HOVER_OVERLAY_COLOR);
                 boolean overIcon = mouseOverIcon(mouseX - this.getContentX(), mouseY - this.getContentY());
                 Identifier joinSprite = overIcon ? JOIN_HIGHLIGHTED_SPRITE : JOIN_SPRITE;
-                graphics.blitSprite(RenderPipelines.GUI_TEXTURED, joinSprite, this.getContentX(), this.getContentY(), ICON_SIZE, ICON_SIZE);
+                graphics.blitSprite(RenderPipelines.GUI_TEXTURED, joinSprite, this.getContentX(), this.getContentY(),
+                        ICON_SIZE, ICON_SIZE);
                 if (overIcon) {
                     RemoteVersionSelectionList.this.handleCursor(graphics);
                 }

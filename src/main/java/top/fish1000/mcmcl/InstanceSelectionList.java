@@ -33,9 +33,13 @@ import net.minecraft.util.Util;
 public final class InstanceSelectionList extends ObjectSelectionList<InstanceSelectionList.Entry> {
     private static final String ICON_PATH_PREFIX = "textures/gui/version/";
     private static final Identifier JOIN_SPRITE = Identifier.withDefaultNamespace("world_list/join");
-    private static final Identifier JOIN_HIGHLIGHTED_SPRITE = Identifier.withDefaultNamespace("world_list/join_highlighted");
+    private static final Identifier JOIN_HIGHLIGHTED_SPRITE = Identifier
+            .withDefaultNamespace("world_list/join_highlighted");
     private static final int ICON_SIZE = 32;
-    /** Text starts this many pixels right of the row's left edge, mirroring the world list. */
+    /**
+     * Text starts this many pixels right of the row's left edge, mirroring the
+     * world list.
+     */
     private static final int TEXT_OFFSET = ICON_SIZE + 3;
     private static final int INFO_COLOR = 0xFF808080;
     private static final int RUNNING_COLOR = 0xFF55FF55;
@@ -61,8 +65,7 @@ public final class InstanceSelectionList extends ObjectSelectionList<InstanceSel
             BooleanSupplier interactable,
             Consumer<HmclInstance> onEntrySelect,
             Consumer<HmclInstance> onEntryInteract,
-            InstanceSelectionList oldList
-    ) {
+            InstanceSelectionList oldList) {
         super(minecraft, width, height, 0, 36);
         this.screen = screen;
         this.runningChecker = runningChecker;
@@ -80,7 +83,10 @@ public final class InstanceSelectionList extends ObjectSelectionList<InstanceSel
         return 270;
     }
 
-    /** Replaces the shown instances; while {@code loading} a spinner entry is shown instead. */
+    /**
+     * Replaces the shown instances; while {@code loading} a spinner entry is shown
+     * instead.
+     */
     public void setInstances(List<HmclInstance> instances, boolean loading) {
         this.instances.clear();
         this.instances.addAll(instances);
@@ -111,7 +117,9 @@ public final class InstanceSelectionList extends ObjectSelectionList<InstanceSel
         return selected instanceof InstanceEntry instanceEntry ? instanceEntry.instance : null;
     }
 
-    /** Recomputes every row's running-status line; the screen calls this each tick. */
+    /**
+     * Recomputes every row's running-status line; the screen calls this each tick.
+     */
     public void refreshRunningStates() {
         for (Entry entry : this.children()) {
             if (entry instanceof InstanceEntry instanceEntry) {
@@ -138,7 +146,8 @@ public final class InstanceSelectionList extends ObjectSelectionList<InstanceSel
         Entry toSelect = null;
         if (this.selectedId != null) {
             for (Entry entry : entries) {
-                if (entry instanceof InstanceEntry instanceEntry && instanceEntry.instance.id().equals(this.selectedId)) {
+                if (entry instanceof InstanceEntry instanceEntry
+                        && instanceEntry.instance.id().equals(this.selectedId)) {
                     toSelect = instanceEntry;
                     break;
                 }
@@ -172,14 +181,16 @@ public final class InstanceSelectionList extends ObjectSelectionList<InstanceSel
     private static Identifier defaultIcon(HmclInstance instance) {
         return Identifier.fromNamespaceAndPath(
                 MinecraftMinecraftLauncher.MODID,
-                ICON_PATH_PREFIX + instance.defaultIconName() + ".png"
-        );
+                ICON_PATH_PREFIX + instance.defaultIconName() + ".png");
     }
 
     public abstract static class Entry extends ObjectSelectionList.Entry<InstanceSelectionList.Entry> {
     }
 
-    /** Vanilla-style "loading" row with animated dots, shown while instances are being discovered. */
+    /**
+     * Vanilla-style "loading" row with animated dots, shown while instances are
+     * being discovered.
+     */
     private final class LoadingEntry extends Entry {
         private Component label() {
             return Component.translatable("screen.minecraftminecraftlauncher.loading");
@@ -212,7 +223,8 @@ public final class InstanceSelectionList extends ObjectSelectionList<InstanceSel
         public void extractContent(GuiGraphicsExtractor graphics, int mouseX, int mouseY, boolean hovered, float a) {
             Font font = InstanceSelectionList.this.minecraft.font;
             Component label = this.label();
-            graphics.text(font, label, this.getContentXMiddle() - font.width(label) / 2, this.getContentYMiddle() - 4, -1);
+            graphics.text(font, label, this.getContentXMiddle() - font.width(label) / 2, this.getContentYMiddle() - 4,
+                    -1);
         }
 
         @Override
@@ -260,16 +272,14 @@ public final class InstanceSelectionList extends ObjectSelectionList<InstanceSel
             }
             line.append(" · ").append(Component.translatable(this.running
                     ? "screen.minecraftminecraftlauncher.entry.status_running_label"
-                    : "screen.minecraftminecraftlauncher.entry.status_stopped_label"
-            ));
+                    : "screen.minecraftminecraftlauncher.entry.status_stopped_label"));
             return line.withColor(this.running ? RUNNING_COLOR : INFO_COLOR);
         }
 
         private Component loaderLabel() {
             return Component.translatableWithFallback(
                     "screen.minecraftminecraftlauncher.install.loader." + this.instance.loader(),
-                    this.instance.loader()
-            );
+                    this.instance.loader());
         }
 
         private void refreshStatus() {
@@ -304,20 +314,19 @@ public final class InstanceSelectionList extends ObjectSelectionList<InstanceSel
                     ICON_SIZE,
                     ICON_SIZE,
                     ICON_SIZE,
-                    ICON_SIZE
-            );
+                    ICON_SIZE);
             if (hovered) {
                 graphics.fill(
                         this.getContentX(),
                         this.getContentY(),
                         this.getContentX() + ICON_SIZE,
                         this.getContentY() + ICON_SIZE,
-                        HOVER_OVERLAY_COLOR
-                );
+                        HOVER_OVERLAY_COLOR);
                 boolean overIcon = mouseOverIcon(mouseX - this.getContentX(), mouseY - this.getContentY());
                 if (!this.running) {
                     Identifier joinSprite = overIcon ? JOIN_HIGHLIGHTED_SPRITE : JOIN_SPRITE;
-                    graphics.blitSprite(RenderPipelines.GUI_TEXTURED, joinSprite, this.getContentX(), this.getContentY(), ICON_SIZE, ICON_SIZE);
+                    graphics.blitSprite(RenderPipelines.GUI_TEXTURED, joinSprite, this.getContentX(),
+                            this.getContentY(), ICON_SIZE, ICON_SIZE);
                     if (overIcon) {
                         InstanceSelectionList.this.handleCursor(graphics);
                     }
@@ -365,8 +374,7 @@ public final class InstanceSelectionList extends ObjectSelectionList<InstanceSel
                     this.instance.version(),
                     Component.translatable(this.running
                             ? "screen.minecraftminecraftlauncher.entry.status_running_label"
-                            : "screen.minecraftminecraftlauncher.entry.status_stopped_label")
-            );
+                            : "screen.minecraftminecraftlauncher.entry.status_stopped_label"));
         }
     }
 
@@ -374,7 +382,10 @@ public final class InstanceSelectionList extends ObjectSelectionList<InstanceSel
         return this.screen;
     }
 
-    /** Search-row loader filter: ALL shows everything, VANILLA only non-modded instances. */
+    /**
+     * Search-row loader filter: ALL shows everything, VANILLA only non-modded
+     * instances.
+     */
     public enum LoaderFilter {
         ALL("screen.minecraftminecraftlauncher.filter.all"),
         VANILLA("screen.minecraftminecraftlauncher.install.loader.none"),

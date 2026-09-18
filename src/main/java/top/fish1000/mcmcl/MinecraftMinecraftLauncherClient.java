@@ -28,8 +28,7 @@ public final class MinecraftMinecraftLauncherClient {
             "key.minecraftminecraftlauncher.open_launcher",
             InputConstants.Type.KEYBOARD,
             InputConstants.KEY_M,
-            KeyMapping.Category.MISC
-    );
+            KeyMapping.Category.MISC);
 
     public MinecraftMinecraftLauncherClient(IEventBus modEventBus, ModContainer container) {
         container.registerExtensionPoint(IConfigScreenFactory.class, ConfigurationScreen::new);
@@ -55,8 +54,8 @@ public final class MinecraftMinecraftLauncherClient {
         // Parked in the top-left corner, which both the title and pause
         // screens keep free (logo and menu rows are centered).
         Button button = Button.builder(
-                        Component.translatable("screen.minecraftminecraftlauncher.open"),
-                        ignored -> Minecraft.getInstance().setScreenAndShow(new LauncherScreen(screen)))
+                Component.translatable("screen.minecraftminecraftlauncher.open"),
+                ignored -> Minecraft.getInstance().setScreenAndShow(new LauncherScreen(screen)))
                 .bounds(4, 4, 200, 20)
                 .build();
         event.addListener(button);

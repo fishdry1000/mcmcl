@@ -10,11 +10,13 @@ import java.util.Map;
 /**
  * Validated install request received from the mod side.
  *
- * <p>A request with a {@code gameVersion} installs a fresh instance;
+ * <p>
+ * A request with a {@code gameVersion} installs a fresh instance;
  * a request without one repairs an existing instance by re-downloading
- * missing files into the repository.  A fresh install may additionally
+ * missing files into the repository. A fresh install may additionally
  * request loader components (HMCL component types such as {@code fabric}
- * or {@code forge}) on top of the game version.</p>
+ * or {@code forge}) on top of the game version.
+ * </p>
  */
 public record HmclInstallRequest(
         String instanceId,

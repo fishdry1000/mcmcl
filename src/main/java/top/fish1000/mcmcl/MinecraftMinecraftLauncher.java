@@ -12,9 +12,11 @@ import net.neoforged.fml.config.ModConfig;
 /**
  * The common entry point for MCMCL.
  *
- * <p>The actual launcher UI is client-only. Keeping this entry point small is
+ * <p>
+ * The actual launcher UI is client-only. Keeping this entry point small is
  * intentional: the mod can still be present in a modpack without loading any
- * client classes on a dedicated server.</p>
+ * client classes on a dedicated server.
+ * </p>
  */
 @Mod(MinecraftMinecraftLauncher.MODID)
 public final class MinecraftMinecraftLauncher {

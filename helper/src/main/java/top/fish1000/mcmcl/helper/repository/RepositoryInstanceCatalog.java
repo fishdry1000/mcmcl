@@ -58,7 +58,7 @@ public final class RepositoryInstanceCatalog {
             }
         } catch (IOException ignored) {
             // A single unreadable instance should not make list fail for all
-            // other instances.  HMCL itself also ignores un-loadable entries.
+            // other instances. HMCL itself also ignores un-loadable entries.
         }
         return null;
     }

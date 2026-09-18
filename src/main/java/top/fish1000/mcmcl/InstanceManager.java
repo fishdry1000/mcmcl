@@ -17,7 +17,10 @@ import com.google.gson.JsonParser;
 
 import net.minecraft.client.Minecraft;
 
-/** Resolves the HMCL repository and handles the small amount of filesystem UI glue. */
+/**
+ * Resolves the HMCL repository and handles the small amount of filesystem UI
+ * glue.
+ */
 public final class InstanceManager {
     private static final String DIRECTORY_README = """
             # MCMCL HMCL repository
@@ -81,7 +84,8 @@ public final class InstanceManager {
         Path repository = instancesDirectory(minecraft);
         Path helperJar = resolveConfiguredPath(Config.HMCL_HELPER_JAR.get(), minecraft.gameDirectory.toPath());
         Path gameDirectory = minecraft.gameDirectory.toPath().toAbsolutePath().normalize();
-        return HELPERS.computeIfAbsent(repository, ignored -> new HmclHelperClient(repository, helperJar, gameDirectory));
+        return HELPERS.computeIfAbsent(repository,
+                ignored -> new HmclHelperClient(repository, helperJar, gameDirectory));
     }
 
     public static void openDirectory(Minecraft minecraft) throws IOException {
@@ -99,7 +103,7 @@ public final class InstanceManager {
      * Renames an instance: moves {@code versions/<oldId>} to
      * {@code versions/<newId>}, renames the conventional manifest file, fixes
      * the manifest's {@code id}/{@code jar} fields and migrates the stored
-     * per-instance settings.  Case-only renames go through a temporary name
+     * per-instance settings. Case-only renames go through a temporary name
      * because Windows treats the paths as identical.
      */
     public static void renameInstance(Minecraft minecraft, HmclInstance instance, String newId) throws IOException {
@@ -204,11 +208,11 @@ public final class InstanceManager {
         String os = System.getProperty("os.name", "").toLowerCase();
         String[] command;
         if (os.contains("win")) {
-            command = new String[]{"explorer.exe", directory.toString()};
+            command = new String[] { "explorer.exe", directory.toString() };
         } else if (os.contains("mac") || os.contains("darwin")) {
-            command = new String[]{"open", directory.toString()};
+            command = new String[] { "open", directory.toString() };
         } else {
-            command = new String[]{"xdg-open", directory.toString()};
+            command = new String[] { "xdg-open", directory.toString() };
         }
         try {
             new ProcessBuilder(command).start();

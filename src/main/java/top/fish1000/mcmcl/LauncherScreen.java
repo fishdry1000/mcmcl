@@ -84,17 +84,14 @@ public final class LauncherScreen extends Screen {
                         200,
                         20,
                         this.searchBox,
-                        Component.translatable("screen.minecraftminecraftlauncher.search")
-                )
-        );
+                        Component.translatable("screen.minecraftminecraftlauncher.search")));
         this.searchBox.setResponder(value -> {
             if (this.list != null) {
                 this.list.updateFilter(value);
             }
         });
         this.searchBox.setHint(
-                Component.translatable("screen.minecraftminecraftlauncher.search").setStyle(EditBox.SEARCH_HINT_STYLE)
-        );
+                Component.translatable("screen.minecraftminecraftlauncher.search").setStyle(EditBox.SEARCH_HINT_STYLE));
         subHeader.addChild(
                 CycleButton.builder(InstanceSelectionList.LoaderFilter::label, this.loaderFilter)
                         .withValues(InstanceSelectionList.LoaderFilter.values())
@@ -110,9 +107,7 @@ public final class LauncherScreen extends Screen {
                                     if (this.list != null) {
                                         this.list.setLoaderFilter(value);
                                     }
-                                }
-                        )
-        );
+                                }));
 
         this.list = this.layout.addToContents(
                 new InstanceSelectionList(
@@ -124,9 +119,7 @@ public final class LauncherScreen extends Screen {
                         this::isInteractable,
                         ignored -> this.updateFooterButtons(),
                         this::toggle,
-                        this.list
-                )
-        );
+                        this.list));
         this.createFooterButtons();
         this.layout.visitWidgets(this::addRenderableWidget);
         this.repositionElements();
@@ -140,49 +133,39 @@ public final class LauncherScreen extends Screen {
         // rows through repositionElements() without rebuilding the screen.
         LinearLayout footerColumn = this.layout.addToFooter(
                 LinearLayout.vertical().spacing(4),
-                settings -> settings.align(0.5F, 1.0F).paddingBottom(FOOTER_BOTTOM_PADDING)
-        );
+                settings -> settings.align(0.5F, 1.0F).paddingBottom(FOOTER_BOTTOM_PADDING));
         LinearLayout primaryRow = footerColumn.addChild(
                 LinearLayout.horizontal().spacing(8),
-                settings -> settings.alignHorizontallyCenter()
-        );
+                settings -> settings.alignHorizontallyCenter());
         this.launchButton = primaryRow.addChild(Button.builder(
                 Component.translatable("screen.minecraftminecraftlauncher.launch"),
-                button -> this.launchSelected()
-        ).build());
+                button -> this.launchSelected()).build());
         this.installButton = primaryRow.addChild(Button.builder(
                 Component.translatable("screen.minecraftminecraftlauncher.install"),
-                button -> this.minecraft.setScreenAndShow(new InstallScreen(this))
-        ).build());
+                button -> this.minecraft.setScreenAndShow(new InstallScreen(this))).build());
 
         LinearLayout secondaryRow = footerColumn.addChild(
                 LinearLayout.horizontal().spacing(SMALL_BUTTON_SPACING),
-                settings -> settings.alignHorizontallyCenter()
-        );
+                settings -> settings.alignHorizontallyCenter());
         this.modsButton = secondaryRow.addChild(Button.builder(
                 Component.translatable("screen.minecraftminecraftlauncher.open_mods_directory"),
-                button -> this.openSelectedMods()
-        ).width(SMALL_BUTTON_WIDTH).build());
+                button -> this.openSelectedMods()).width(SMALL_BUTTON_WIDTH).build());
         this.editButton = secondaryRow.addChild(Button.builder(
                 Component.translatable("screen.minecraftminecraftlauncher.edit"),
-                button -> this.editSelected()
-        ).width(SMALL_BUTTON_WIDTH).build());
+                button -> this.editSelected()).width(SMALL_BUTTON_WIDTH).build());
         secondaryRow.addChild(Button.builder(
                 Component.translatable("screen.minecraftminecraftlauncher.open_directory"),
-                button -> this.openDirectory()
-        )
+                button -> this.openDirectory())
                 .width(SMALL_BUTTON_WIDTH)
                 .tooltip(Tooltip.create(
                         Component.literal(InstanceManager.instancesDirectory(this.minecraft).toString())))
                 .build());
         secondaryRow.addChild(Button.builder(
                 Component.translatable("screen.minecraftminecraftlauncher.refresh"),
-                button -> this.reloadInstances()
-        ).width(SMALL_BUTTON_WIDTH).build());
+                button -> this.reloadInstances()).width(SMALL_BUTTON_WIDTH).build());
         secondaryRow.addChild(Button.builder(
                 CommonComponents.GUI_BACK,
-                button -> this.onClose()
-        ).width(SMALL_BUTTON_WIDTH).build());
+                button -> this.onClose()).width(SMALL_BUTTON_WIDTH).build());
     }
 
     @Override
@@ -218,15 +201,15 @@ public final class LauncherScreen extends Screen {
         boolean hasLog = !this.latestOutput.isBlank();
         int blockHeight = hasLog ? 19 : 9;
         int statusY = bandTop + (band - blockHeight) / 2;
-        graphics.centeredText(this.font, this.status, this.width / 2, statusY, this.statusError ? 0xFFFF7777 : 0xFFB8E0FF);
+        graphics.centeredText(this.font, this.status, this.width / 2, statusY,
+                this.statusError ? 0xFFFF7777 : 0xFFB8E0FF);
         if (hasLog) {
             graphics.centeredText(
                     this.font,
                     this.font.plainSubstrByWidth(this.latestOutput, this.width - 24),
                     this.width / 2,
                     statusY + 10,
-                    0xFFCCCCCC
-            );
+                    0xFFCCCCCC);
         }
     }
 
@@ -268,8 +251,7 @@ public final class LauncherScreen extends Screen {
                         this.status = Component.translatable(
                                 "screen.minecraftminecraftlauncher.found_with_errors",
                                 this.instances.size(),
-                                result.problems().size()
-                        );
+                                result.problems().size());
                         this.statusError = true;
                         this.latestOutput = result.problems().getFirst();
                     }
@@ -351,8 +333,7 @@ public final class LauncherScreen extends Screen {
                     this.minecraft,
                     line -> this.minecraft.execute(() -> {
                         this.latestOutput = line;
-                    })
-            );
+                    }));
             handle.started().whenComplete((ignored, error) -> this.minecraft.execute(() -> {
                 if (error == null
                         && helper.isRunning(instance.id())
@@ -364,7 +345,8 @@ public final class LauncherScreen extends Screen {
             handle.exitCode().whenComplete((exitCode, error) -> this.minecraft.execute(() -> {
                 this.stoppingInstances.remove(instance.id());
                 if (error != null) {
-                    this.status = Component.translatable("screen.minecraftminecraftlauncher.exit_error", instance.name());
+                    this.status = Component.translatable("screen.minecraftminecraftlauncher.exit_error",
+                            instance.name());
                     this.statusError = true;
                     this.latestOutput = failureMessage(error);
                 } else if (exitCode == 0) {
@@ -374,8 +356,7 @@ public final class LauncherScreen extends Screen {
                     this.status = Component.translatable(
                             "screen.minecraftminecraftlauncher.exit_code",
                             instance.name(),
-                            exitCode
-                    );
+                            exitCode);
                     this.statusError = true;
                 }
                 this.updateFooterButtons();
@@ -397,7 +378,10 @@ public final class LauncherScreen extends Screen {
         return this.minecraft.getUser().getName();
     }
 
-    /** Mirrors the vanilla world screen: the primary button swaps between play and stop per selection. */
+    /**
+     * Mirrors the vanilla world screen: the primary button swaps between play and
+     * stop per selection.
+     */
     private void updateFooterButtons() {
         HmclHelperClient helper = InstanceManager.helper(this.minecraft);
         HmclHelperClient.HelperInfo info = helper.helperInfo();
@@ -407,8 +391,7 @@ public final class LauncherScreen extends Screen {
         if (this.launchButton != null) {
             this.launchButton.setMessage(Component.translatable(running
                     ? "screen.minecraftminecraftlauncher.stop"
-                    : "screen.minecraftminecraftlauncher.launch"
-            ));
+                    : "screen.minecraftminecraftlauncher.launch"));
             this.launchButton.active = selected != null && (running || launchAvailable);
         }
         if (this.installButton != null) {

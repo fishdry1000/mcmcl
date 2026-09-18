@@ -17,10 +17,12 @@ import com.google.gson.JsonParser;
  * Disk cache for the helper's remote version listings so the install screen
  * opens instantly; a background refresh keeps entries current.
  *
- * <p>One JSON file under {@code <repository>/cache/} holds every entry keyed
+ * <p>
+ * One JSON file under {@code <repository>/cache/} holds every entry keyed
  * by component: the empty string for the game version list, and
- * {@code loader/gameVersion} for loader version lists.  Entries are tagged
- * with the download provider, so switching providers discards the cache.</p>
+ * {@code loader/gameVersion} for loader version lists. Entries are tagged
+ * with the download provider, so switching providers discards the cache.
+ * </p>
  */
 public final class RemoteVersionCache {
     /** Entries older than this are re-validated on open (but still shown). */
@@ -36,7 +38,10 @@ public final class RemoteVersionCache {
         }
     }
 
-    /** Returns the cached entry, or {@code null} when absent, stale-provider or unreadable. */
+    /**
+     * Returns the cached entry, or {@code null} when absent, stale-provider or
+     * unreadable.
+     */
     public static Entry read(Path repository, String provider, String key) {
         synchronized (LOCK) {
             try {
@@ -63,8 +68,7 @@ public final class RemoteVersionCache {
                     versions.add(new HmclHelperClient.RemoteVersion(
                             version.get("id").getAsString(),
                             version.get("type").getAsString(),
-                            version.get("releaseTime").getAsString()
-                    ));
+                            version.get("releaseTime").getAsString()));
                 }
                 return new Entry(List.copyOf(versions), entry.get("fetchedAt").getAsLong());
             } catch (IOException | RuntimeException ignored) {
@@ -74,7 +78,8 @@ public final class RemoteVersionCache {
     }
 
     /** Best-effort write; cache failures must never break the install screen. */
-    public static void write(Path repository, String provider, String key, List<HmclHelperClient.RemoteVersion> versions) {
+    public static void write(Path repository, String provider, String key,
+            List<HmclHelperClient.RemoteVersion> versions) {
         synchronized (LOCK) {
             try {
                 Path file = cacheFile(repository);

@@ -56,14 +56,15 @@ import java.util.regex.Pattern;
 /**
  * Real HMCL Core adapter, compiled only by the opt-in HMCL profile.
  *
- * <p>This adapter intentionally uses HMCL Core's official-layout repository
- * implementation rather than reading launch.json.  The small repository and
+ * <p>
+ * This adapter intentionally uses HMCL Core's official-layout repository
+ * implementation rather than reading launch.json. The small repository and
  * instance subclasses below supply the concrete headless types that Core
- * itself leaves abstract; no HMCL GUI/settings module is required.</p>
+ * itself leaves abstract; no HMCL GUI/settings module is required.
+ * </p>
  */
 public final class RealHmclCoreAdapter implements HmclCoreAdapter {
-    private static final Pattern JAVA_VERSION_OUTPUT =
-            Pattern.compile("(?:java|openjdk) version \"([^\"]+)\"");
+    private static final Pattern JAVA_VERSION_OUTPUT = Pattern.compile("(?:java|openjdk) version \"([^\"]+)\"");
 
     private final HeadlessGameRepository repository;
     private final Path repositoryRoot;
@@ -83,10 +84,10 @@ public final class RealHmclCoreAdapter implements HmclCoreAdapter {
                 : downloadProvider;
         // HMCL's FetchTask downloads every remote file through the global
         // CacheRepository singleton, whose ETag index only exists after
-        // changeDirectory.  Keep the download cache inside the HMCL repository.
+        // changeDirectory. Keep the download cache inside the HMCL repository.
         CacheRepository.getInstance().changeDirectory(this.repositoryRoot);
         // HMCL Core publishes repository snapshots and task progress through
-        // JavaFX, so the toolkit must be running.  Note that the resulting
+        // JavaFX, so the toolkit must be running. Note that the resulting
         // FX thread is not a daemon and Platform.exit() does not reliably
         // stop it without a launched Application; the process entry point
         // therefore terminates the JVM explicitly.
@@ -109,7 +110,7 @@ public final class RealHmclCoreAdapter implements HmclCoreAdapter {
     public List<InstanceDescriptor> listInstances() throws Exception {
         synchronized (repositoryLock) {
             // An active install holds an exclusive repository draft, and HMCL
-            // Core rejects refresh() while a draft exists.  Serving the last
+            // Core rejects refresh() while a draft exists. Serving the last
             // snapshot keeps list working during long downloads.
             if (!installActive.get()) {
                 repository.refresh();
@@ -346,7 +347,7 @@ public final class RealHmclCoreAdapter implements HmclCoreAdapter {
             Files.createDirectories(instance.getRunDirectory());
 
             // Keep the same launch-time normalization step used by HMCL's GUI
-            // launcher.  The repository still owns inheritance resolution; Core
+            // launcher. The repository still owns inheritance resolution; Core
             // owns loader-specific repairs and duplicate-library cleanup.
             GameInstanceManifest manifest = LaunchManifestNormalizer.repairForLaunch(
                     instance.getResolvedManifest());
@@ -458,7 +459,7 @@ public final class RealHmclCoreAdapter implements HmclCoreAdapter {
             context.stop();
         } else if (activeLaunches.contains(instanceId)) {
             // The launch task has entered the adapter but has not published
-            // its context yet.  The first launch-time cancellation check will
+            // its context yet. The first launch-time cancellation check will
             // consume this marker after the context is installed.
             pendingStops.add(instanceId);
         }

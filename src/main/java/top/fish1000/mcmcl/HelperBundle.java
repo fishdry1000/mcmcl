@@ -13,13 +13,17 @@ import java.security.MessageDigest;
  * Extracts the HMCL helper JAR bundled in the mod so the launcher works out
  * of the box.
  *
- * <p>Extractions are tracked with a marker file next to the helper JAR: a
+ * <p>
+ * Extractions are tracked with a marker file next to the helper JAR: a
  * missing helper is extracted, a stale extraction is refreshed when the mod
  * ships a newer helper, and a helper that was placed by the user (no marker)
- * is never touched.</p>
+ * is never touched.
+ * </p>
  *
- * <p>This class deliberately depends only on the JDK so its behavior can be
- * exercised outside the game process.</p>
+ * <p>
+ * This class deliberately depends only on the JDK so its behavior can be
+ * exercised outside the game process.
+ * </p>
  */
 public final class HelperBundle {
     /** Resource path of the helper JAR inside the mod. */

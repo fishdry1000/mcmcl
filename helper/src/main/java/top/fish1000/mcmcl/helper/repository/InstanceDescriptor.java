@@ -5,7 +5,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Stable, protocol-facing subset of an HMCL game instance.  {@code loader}
+ * Stable, protocol-facing subset of an HMCL game instance. {@code loader}
  * is a best-effort sniff of the manifest (see {@link ManifestLoaderProbe})
  * and is empty for vanilla instances.
  */

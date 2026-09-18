@@ -11,7 +11,7 @@ import com.google.gson.JsonParser;
 
 /**
  * Per-instance launch overrides, stored by MCMCL next to its repository
- * cache.  HMCL keeps its own version settings in the launcher's global
+ * cache. HMCL keeps its own version settings in the launcher's global
  * config, which the headless helper does not read, so these are the values
  * MCMCL itself applies when building a launch request: blank/zero/inherit
  * falls back to the global client configuration.
@@ -50,7 +50,10 @@ public final class InstanceSettingsStore {
 
     public static final Settings EMPTY = new Settings("", 0, VersionIsolationOverride.INHERIT);
 
-    /** Returns the stored overrides for the instance, or empty defaults when none exist. */
+    /**
+     * Returns the stored overrides for the instance, or empty defaults when none
+     * exist.
+     */
     public static Settings read(Path repository, String instanceId) {
         synchronized (LOCK) {
             try {
@@ -69,8 +72,7 @@ public final class InstanceSettingsStore {
                 return new Settings(
                         javaPath == null ? "" : javaPath.getAsString(),
                         maxMemory != null && maxMemory.isJsonPrimitive() ? maxMemory.getAsInt() : 0,
-                        parseVersionIsolation(versionIsolation)
-                );
+                        parseVersionIsolation(versionIsolation));
             } catch (IOException | RuntimeException ignored) {
                 return EMPTY;
             }

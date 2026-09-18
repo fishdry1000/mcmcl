@@ -26,7 +26,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * JSON Lines command loop.  The class is deliberately independent of HMCL
+ * JSON Lines command loop. The class is deliberately independent of HMCL
  * classes; only {@link HmclCoreAdapter} knows how to invoke HMCL Core.
  */
 public final class HelperServer {
@@ -62,7 +62,7 @@ public final class HelperServer {
     }
 
     /**
-     * Reads requests until EOF or a shutdown request.  A malformed line gets a
+     * Reads requests until EOF or a shutdown request. A malformed line gets a
      * response with a null id and does not terminate the helper.
      */
     public int run(BufferedReader input) throws IOException {
@@ -462,7 +462,7 @@ public final class HelperServer {
         try {
             adapter.shutdown();
         } catch (Exception e) {
-            // There is no request left to attach this to.  Keep protocol
+            // There is no request left to attach this to. Keep protocol
             // stdout valid and leave diagnostics to the adapter/OS log.
         }
     }

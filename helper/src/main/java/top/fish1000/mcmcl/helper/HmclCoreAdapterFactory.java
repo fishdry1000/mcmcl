@@ -13,8 +13,7 @@ import java.nio.file.Path;
  * protocol build a compile-time dependency on HMCL classes.
  */
 public final class HmclCoreAdapterFactory {
-    private static final String PROFILE_ADAPTER =
-            "top.fish1000.mcmcl.helper.hmcl.RealHmclCoreAdapterProvider";
+    private static final String PROFILE_ADAPTER = "top.fish1000.mcmcl.helper.hmcl.RealHmclCoreAdapterProvider";
 
     private HmclCoreAdapterFactory() {
     }
