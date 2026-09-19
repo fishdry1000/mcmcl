@@ -14,7 +14,9 @@ tasks.named('wrapper', Wrapper).configure {
     distributionType = Wrapper.DistributionType.BIN
 }
 
-version = mod_version
+// Include the Minecraft version in artifact file names (open convention
+// {mod_version}+{mc_version}) so jars from different MC versions don't collide.
+version = "${mod_version}+${minecraft_version}"
 group = mod_group_id
 
 sourceSets.main.resources {
