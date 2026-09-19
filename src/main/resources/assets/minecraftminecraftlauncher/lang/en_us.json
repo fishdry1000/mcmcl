@@ -5,7 +5,7 @@
   "screen.minecraftminecraftlauncher.found": "%s instance(s) found",
   "screen.minecraftminecraftlauncher.found_with_errors": "%s instance(s) found, %s invalid",
   "screen.minecraftminecraftlauncher.scan_failed": "Instance scan failed",
-  "screen.minecraftminecraftlauncher.empty": "No HMCL instances found",
+  "screen.minecraftminecraftlauncher.empty": "No game instances found",
   "screen.minecraftminecraftlauncher.search": "Search instances",
   "screen.minecraftminecraftlauncher.filter": "Filter",
   "screen.minecraftminecraftlauncher.filter.all": "All",

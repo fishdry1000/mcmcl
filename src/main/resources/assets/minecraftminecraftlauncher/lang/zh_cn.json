@@ -5,7 +5,7 @@
   "screen.minecraftminecraftlauncher.found": "找到 %s 个实例",
   "screen.minecraftminecraftlauncher.found_with_errors": "找到 %s 个实例，%s 个配置无效",
   "screen.minecraftminecraftlauncher.scan_failed": "实例扫描失败",
-  "screen.minecraftminecraftlauncher.empty": "没有找到 HMCL 实例",
+  "screen.minecraftminecraftlauncher.empty": "没有找到游戏实例",
   "screen.minecraftminecraftlauncher.search": "搜索实例",
   "screen.minecraftminecraftlauncher.filter": "筛选",
   "screen.minecraftminecraftlauncher.filter.all": "全部",
