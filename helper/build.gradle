@@ -176,6 +176,11 @@ tasks.named('jar') {
     if (hmclProfile) {
         duplicatesStrategy = DuplicatesStrategy.EXCLUDE
         exclude('META-INF/*.SF', 'META-INF/*.RSA', 'META-INF/*.DSA')
+        // The closure below resolves runtimeClasspath during execution, which
+        // does not attach task dependencies: without this dependsOn the
+        // substituted HMCLCore project's jar is not guaranteed to exist, or
+        // to be fully written, when this task reads it.
+        dependsOn configurations.runtimeClasspath.buildDependencies
         from({
             configurations.runtimeClasspath.collect { entry ->
                 entry.isDirectory() ? entry : zipTree(entry)
