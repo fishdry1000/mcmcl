@@ -19,7 +19,7 @@ helper 是 MCMCL 的独立启动后端：单独 JVM 进程，与模组通过 std
 # 无依赖协议构建（从仓库根目录执行）
 .\gradlew.bat :helper:test
 .\gradlew.bat :helper:jar
-java -jar helper\build\libs\mcmcl-hmcl-helper-0.1.0.jar --repository C:\path\to\.minecraft
+java -jar helper\build\libs\mcmcl-hmcl-helper-0.1.1.jar --repository C:\path\to\.minecraft
 ```
 
 上面的默认 JAR 只用于协议测试和仓库发现；未接入 HMCL Core 时 `launch`/`install` 返回 `HMCL_CORE_UNAVAILABLE`。可启动 Minecraft 的 profile JAR 需要固定 HMCL checkout：
@@ -28,7 +28,7 @@ java -jar helper\build\libs\mcmcl-hmcl-helper-0.1.0.jar --repository C:\path\to\
 .\gradlew.bat `
   "-PhmclCheckout=C:\src\HMCL" `
   :helper:clean :helper:test :helper:installHelper
-java -jar helper\build-hmcl\libs\mcmcl-hmcl-helper-0.1.0.jar --repository C:\path\to\.minecraft
+java -jar helper\build-hmcl\libs\mcmcl-hmcl-helper-0.1.1.jar --repository C:\path\to\.minecraft
 ```
 
 - profile 构建输出在 `helper/build-hmcl/`（刻意与 `helper/build/` 分离，避免旧适配器类混入无依赖构建）。
@@ -89,7 +89,7 @@ HMCL Core 的任务进度与快照发布依赖 JavaFX。为了让 profile JAR �
 模组在其他请求前自动发送 `hello`，返回协议版本、helper 版本、后端名称、能力位与 HMCL 提交：
 
 ```json
-{"type":"response","id":"h1","ok":true,"protocolVersion":1,"helperVersion":"0.1.0","backend":"hmcl-core","launchAvailable":true,"installAvailable":true,"hmclProfile":true,"hmclCommit":"090f0b9822a2860f4c3dc1008d9528d304d72d10"}
+{"type":"response","id":"h1","ok":true,"protocolVersion":1,"helperVersion":"0.1.1","backend":"hmcl-core","launchAvailable":true,"installAvailable":true,"hmclProfile":true,"hmclCommit":"090f0b9822a2860f4c3dc1008d9528d304d72d10"}
 ```
 
 协议版本不兼容时，模组会关闭该 helper 并显示明确错误；默认无 HMCL profile 的 JAR 报告 `backend:"unavailable"`、`launchAvailable:false`、`installAvailable:false`。

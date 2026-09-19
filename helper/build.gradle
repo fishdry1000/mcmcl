@@ -3,7 +3,7 @@ plugins {
 }
 
 group = 'top.fish1000.mcmcl'
-version = '0.1.0'
+version = '0.1.1'
 
 // Preserve the standalone helper artifact name now that this project is
 // nested under the root build (whose child project name is simply "helper").
