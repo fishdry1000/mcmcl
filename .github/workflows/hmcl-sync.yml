@@ -41,7 +41,7 @@ jobs:
           set -euo pipefail
 
           sha="$(git ls-remote https://github.com/HMCL-dev/HMCL.git refs/heads/main | awk 'NR == 1 { print $1 }')"
-          pinned="$(sed -n 's/^hmclPinnedCommit=//p' helper/gradle.properties | head -n 1 | tr -d '\r')"
+          pinned="$(sed -n 's/^hmclPinnedCommit=//p' gradle.properties | head -n 1 | tr -d '\r')"
 
           if [[ ! "$sha" =~ ^[0-9a-f]{40}$ ]]; then
             echo "Could not resolve a full HMCL main SHA: $sha" >&2
@@ -99,14 +99,21 @@ jobs:
           HMCL_CHECKOUT: ${{ github.workspace }}/.hmcl
           HMCL_COMMIT: ${{ steps.resolve.outputs.sha }}
         run: |
-          xvfb-run -a ./gradlew --no-daemon -p helper \
+          xvfb-run -a ./gradlew --no-daemon \
             "-PhmclCheckout=$HMCL_CHECKOUT" \
             "-PhmclCommit=$HMCL_COMMIT" \
-            clean test jar
+            :helper:clean :helper:test :helper:jar
 
       - name: Build mod with bundled helper
         if: steps.resolve.outputs.changed == 'true'
-        run: ./gradlew --no-daemon build -PrequireHelperEmbed=true
+        env:
+          HMCL_CHECKOUT: ${{ github.workspace }}/.hmcl
+          HMCL_COMMIT: ${{ steps.resolve.outputs.sha }}
+        run: |
+          ./gradlew --no-daemon \
+            "-PhmclCheckout=$HMCL_CHECKOUT" \
+            "-PhmclCommit=$HMCL_COMMIT" \
+            :build -PrequireHelperEmbed=true
 
   propose:
     name: Propose HMCL pin update
@@ -139,7 +146,7 @@ jobs:
 
           sha = os.environ["HMCL_COMMIT"]
           replacements = [
-              (Path("helper/gradle.properties"),
+              (Path("gradle.properties"),
                r"(?m)^(hmclPinnedCommit=)[0-9a-f]{40}(\r?)$",
                rf"\g<1>{sha}\g<2>", 1),
               (Path("README.md"),
@@ -162,7 +169,7 @@ jobs:
                   file.write(updated)
           PY
 
-          grep -q "^hmclPinnedCommit=${HMCL_COMMIT}$" helper/gradle.properties
+          grep -q "^hmclPinnedCommit=${HMCL_COMMIT}$" gradle.properties
 
       - name: Create HMCL update PR
         uses: peter-evans/create-pull-request@v7
@@ -177,7 +184,7 @@ jobs:
             HMCL `main` advanced from `${{ needs.candidate.outputs.pinned }}` to `${{ needs.candidate.outputs.sha }}`.
 
             The candidate was checked out at the exact commit and passed:
-            - `helper`: HMCL profile `clean test jar` under JDK 25
-            - root project: `build -PrequireHelperEmbed=true`
+            - `:helper`: HMCL profile `:helper:clean :helper:test :helper:jar` under JDK 25
+            - root project: `:build -PrequireHelperEmbed=true` with the same profile properties
 
             The pin remains an exact commit so release builds stay reproducible.

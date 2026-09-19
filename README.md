@@ -34,7 +34,7 @@ Minecraft Minecraft Launcher 是一款运行在 Minecraft 26.3 里的启动器 N
 
 ## 从源码构建
 
-需要 JDK 25。Helper 依赖项目固定版本的 HMCL 源码，构建前请先拉取并切换到对应提交。
+需要 JDK 25。仓库现在是一个 Gradle 多项目工程，Helper 以 `:helper` 子项目构建；它依赖项目固定版本的 HMCL 源码，构建前请先拉取并切换到对应提交。
 
 ### PowerShell（Windows）
 
@@ -42,8 +42,8 @@ Minecraft Minecraft Launcher 是一款运行在 Minecraft 26.3 里的启动器 N
 git clone https://github.com/HMCL-dev/HMCL.git ..\HMCL
 git -C ..\HMCL checkout 090f0b9822a2860f4c3dc1008d9528d304d72d10
 
-.\gradlew.bat -p helper "-PhmclCheckout=$((Resolve-Path '..\HMCL').Path)" clean test installHelper
-.\gradlew.bat build
+.\gradlew.bat "-PhmclCheckout=$((Resolve-Path '..\HMCL').Path)" :helper:clean :helper:test :helper:installHelper
+.\gradlew.bat "-PhmclCheckout=$((Resolve-Path '..\HMCL').Path)" :build -PrequireHelperEmbed=true
 ```
 
 ### Bash（Linux/macOS）
@@ -52,9 +52,11 @@ git -C ..\HMCL checkout 090f0b9822a2860f4c3dc1008d9528d304d72d10
 git clone https://github.com/HMCL-dev/HMCL.git ../HMCL
 git -C ../HMCL checkout 090f0b9822a2860f4c3dc1008d9528d304d72d10
 
-./gradlew -p helper "-PhmclCheckout=$(cd ../HMCL && pwd)" clean test installHelper
-./gradlew build
+./gradlew "-PhmclCheckout=$(cd ../HMCL && pwd)" :helper:clean :helper:test :helper:installHelper
+./gradlew "-PhmclCheckout=$(cd ../HMCL && pwd)" :build -PrequireHelperEmbed=true
 ```
+
+`:build` 只执行根模组的生命周期任务；不带项目路径的 `build` 会按 Gradle 多项目语义同时执行 `:helper:build`。
 
 ## 许可证
 

@@ -1,4 +1,4 @@
-# 独立 HMCL helper（JSON Lines + HMCL Core）
+# HMCL helper 子项目（JSON Lines + HMCL Core）
 
 helper 是 MCMCL 的独立启动后端：单独 JVM 进程，与模组通过 stdin/stdout 的 JSON Lines 通信。实例发现、manifest 继承解析、classpath/JVM 参数生成、原生库处理、下载安装与进程生命周期全部交给 HMCL Core；helper 本身只包含协议、仓库发现和 HMCL Core 适配层。
 
@@ -13,29 +13,29 @@ helper 是 MCMCL 的独立启动后端：单独 JVM 进程，与模组通过 std
 
 ## 构建
 
-协议代码和 HMCL Core ABI 以 Java 17 为基线；HMCL checkout 的 JavaFX 25 profile 要求用 JDK 25 构建、测试和运行（与 Minecraft 26.3 一致）。
+协议代码和 HMCL Core ABI 以 Java 17 为基线；统一从仓库根 wrapper 执行 Gradle，当前模组工程要求 JDK 25，HMCL checkout 的 JavaFX 25 profile 也要求 JDK 25。
 
 ```powershell
-# 无依赖协议构建（JDK 17 即可）
-.\gradlew.bat -p helper test
-.\gradlew.bat -p helper jar
+# 无依赖协议构建（从仓库根目录执行）
+.\gradlew.bat :helper:test
+.\gradlew.bat :helper:jar
 java -jar helper\build\libs\mcmcl-hmcl-helper-0.1.0.jar --repository C:\path\to\.minecraft
 ```
 
 上面的默认 JAR 只用于协议测试和仓库发现；未接入 HMCL Core 时 `launch`/`install` 返回 `HMCL_CORE_UNAVAILABLE`。可启动 Minecraft 的 profile JAR 需要固定 HMCL checkout：
 
 ```powershell
-.\gradlew.bat -p helper `
+.\gradlew.bat `
   "-PhmclCheckout=C:\src\HMCL" `
-  clean test installHelper
+  :helper:clean :helper:test :helper:installHelper
 java -jar helper\build-hmcl\libs\mcmcl-hmcl-helper-0.1.0.jar --repository C:\path\to\.minecraft
 ```
 
 - profile 构建输出在 `helper/build-hmcl/`（刻意与 `helper/build/` 分离，避免旧适配器类混入无依赖构建）。
 - profile JAR 包含 HMCL Core 和传递依赖，**不含 JavaFX**（运行时按平台拉取，见下文），因此平台无关、单文件分发。
 - profile JAR 会从 checkout 复制 `LICENSE` 到 `META-INF/licenses/HMCL-LICENSE.txt`；本项目与 HMCL 同为 GPL-3.0，发布时仍须提供对应源码或有效的源码获取方式。
-- `installHelper` 写入 `../run/mcmcl/hmcl-helper.jar`，可用 `-PhelperInstallDirectory=<目录>` 覆盖；也可以直接使用 Gradle 的 `run` 任务。
-- 固定提交记录在 `helper/gradle.properties` 的 `hmclPinnedCommit`。Git checkout 会校验 HEAD 与之一致，且拒绝带脏改动（本地调试豁免 `-PhmclAllowDirty=true`，该产物不应发布）；不含 `.git` 的源码压缩包无法自动校验，构建只把提交写入 JAR 元数据，发布者须自行确认来源。可用 `-PhmclCommit=<commit>` 覆盖记录值。
+- `installHelper` 写入仓库根的 `run/mcmcl/hmcl-helper.jar`，可用 `-PhelperInstallDirectory=<目录>` 覆盖；也可以直接使用 Gradle 的 `:helper:run` 任务。
+- 固定提交记录在根 `gradle.properties` 的 `hmclPinnedCommit`。Git checkout 会校验 HEAD 与之一致，且拒绝带脏改动（本地调试豁免 `-PhmclAllowDirty=true`，该产物不应发布）；不含 `.git` 的源码压缩包无法自动校验，构建只把提交写入 JAR 元数据，发布者须自行确认来源。可用 `-PhmclCommit=<commit>` 覆盖记录值。
 - 构建期的 JavaFX 编译依赖默认取宿主平台 classifier、版本 25；可用 `-PhmclJavafxVersion` 和 `-PhmclJavafxClassifier` 覆盖。
 
 HMCL Core 的获取方式（源码 composite build 或发布到本机 Maven 仓库）见下文[背景调研](#背景调研hmcl-core-接入)。
@@ -156,7 +156,7 @@ HMCL Core 的任务进度与快照发布依赖 JavaFX。为了让 profile JAR �
 ```powershell
 git clone https://github.com/HMCL-dev/HMCL.git C:\src\HMCL
 git -C C:\src\HMCL checkout <经过审查的固定提交>
-.\gradlew -p helper "-PhmclCheckout=C:\src\HMCL" clean test installHelper
+.\gradlew "-PhmclCheckout=C:\src\HMCL" :helper:clean :helper:test :helper:installHelper
 ```
 
 该参数会把 `org.jackhuang:HMCLCore` 替换为 checkout 中的 `:HMCLCore` 项目并编译 `src/hmcl/java`。这是完整 HMCL Gradle 构建，首次构建会解析 HMCL 的构建逻辑和 Core 依赖。正式发布前应把 checkout 固定到已审查的提交。
@@ -167,7 +167,7 @@ git -C C:\src\HMCL checkout <经过审查的固定提交>
 cd C:\src\HMCL
 .\gradlew :HMCLCore:publishToMavenLocal
 cd <MCMCL checkout>
-.\gradlew.bat -p helper "-PhmclGroup=HMCL3" "-PhmclVersion=unspecified" test
+.\gradlew.bat "-PhmclGroup=HMCL3" "-PhmclVersion=unspecified" :helper:test
 ```
 
 方案 B 的 group/version 必须与固定 checkout 实际发布的 POM 一致，适合本地验证；作为可复现发布机制时必须同时保存源码提交、生成的 POM/依赖锁定和许可证材料。
@@ -195,7 +195,6 @@ cd <MCMCL checkout>
 ```text
 helper/
 ├─ README.md
-├─ settings.gradle
 ├─ build.gradle
 └─ src/
    ├─ main/java/top/fish1000/mcmcl/helper/

@@ -137,31 +137,42 @@ dependencies {
 // Bundle the standalone HMCL helper (profile build) into the mod JAR so the
 // in-game launcher works out of the box: at runtime the mod extracts it to
 // the configured helper location when it is missing (see HelperBundle).
-// Build the helper first:  gradlew.bat -p helper "-PhmclCheckout=<checkout>" jar
-def helperProfileLibs = file('helper/build-hmcl/libs')
-def helperJarCandidates = helperProfileLibs.listFiles()
-        ?.findAll { it.isFile() && (it.name ==~ /mcmcl-hmcl-helper-.*\.jar/) }
-        ?.sort { it.lastModified() }
-def bundledHelperJar = helperJarCandidates ? helperJarCandidates.last() : null
-if (bundledHelperJar == null) {
-    def message = ('No HMCL profile helper jar found in helper/build-hmcl/libs; the mod will not embed a helper. ' +
-            'Build it with:  gradlew.bat -p helper "-PhmclCheckout=<checkout>" jar  ' +
-            '(or force this build to fail with -PrequireHelperEmbed=true)')
-    if (providers.gradleProperty('requireHelperEmbed').getOrElse('false').toBoolean()) {
-        throw new GradleException(message)
-    }
-    logger.warn('WARNING: {}', message)
+// A profile helper is built as part of the same multi-project invocation.
+// Do not scan helper/build-hmcl/libs here: configuration-cache could retain a
+// stale file and a newly requested :helper:jar would have no task edge.
+def helperProfileRequested = providers.gradleProperty('hmclCheckout')
+        .map { !it.isBlank() }
+        .getOrElse(false) || providers.gradleProperty('hmclVersion')
+        .map { !it.isBlank() }
+        .getOrElse(false)
+def requireHelperEmbed = providers.gradleProperty('requireHelperEmbed')
+        .map { it.toBoolean() }
+        .getOrElse(false)
+def helperEmbedMessage = ('No HMCL profile helper requested; the mod will not embed a helper. ' +
+        'Build with: gradlew.bat "-PhmclCheckout=<checkout>" :build ' +
+        '(or omit -PrequireHelperEmbed=true for a dependency-free mod build)')
+if (requireHelperEmbed && !helperProfileRequested) {
+    throw new GradleException(helperEmbedMessage)
 }
 
 def helperEmbedDir = file("$buildDir/helperEmbed")
-def prepareBundledHelper = tasks.register('prepareBundledHelper', Copy) {
-    if (bundledHelperJar != null) {
-        from(bundledHelperJar) {
-            rename { 'hmcl-helper.jar' }
-        }
-    }
+def prepareBundledHelper = tasks.register('prepareBundledHelper', Sync) {
     // Mirrors HelperBundle.RESOURCE inside the mod JAR.
     into file("$helperEmbedDir/helper")
+}
+
+if (helperProfileRequested) {
+    // The helper applies the application plugin in its own build script. The
+    // callback keeps this wiring lazy until that subproject has been evaluated.
+    project(':helper').pluginManager.withPlugin('application') {
+        def helperJar = project(':helper').tasks.named('jar')
+        prepareBundledHelper.configure {
+            dependsOn(helperJar)
+            from(helperJar.flatMap { it.archiveFile }) {
+                rename { 'hmcl-helper.jar' }
+            }
+        }
+    }
 }
 
 // This block of code expands all declared replace properties in the specified resource targets.
@@ -185,7 +196,7 @@ var generateModMetadata = tasks.register("generateModMetadata", ProcessResources
 // this works with both building through Gradle and the IDE.
 sourceSets.main.resources.srcDir generateModMetadata
 // Include the bundled HMCL helper (see prepareBundledHelper above).  The
-// plain directory keeps the helper/hmcl-helper.jar layout; wiring the Copy
+// plain directory keeps the helper/hmcl-helper.jar layout; wiring the Sync
 // task into processResources provides the build ordering.
 sourceSets.main.resources.srcDir helperEmbedDir
 tasks.named('processResources') { dependsOn prepareBundledHelper }

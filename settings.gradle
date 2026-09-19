@@ -7,3 +7,18 @@ pluginManagement {
 plugins {
     id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'
 }
+
+rootProject.name = "mcmcl"
+include(":helper")
+
+// HMCL does not currently publish a stable HMCLCore artifact. This optional
+// composite-build hook is dormant unless hmclCheckout is supplied.
+def hmclCheckout = providers.gradleProperty("hmclCheckout").orNull
+if (hmclCheckout != null && !hmclCheckout.isBlank()) {
+    includeBuild(file(hmclCheckout)) {
+        dependencySubstitution {
+            substitute module("org.jackhuang:HMCLCore") using project(":HMCLCore")
+            substitute module("HMCL3:HMCLCore") using project(":HMCLCore")
+        }
+    }
+}

@@ -5,6 +5,12 @@ plugins {
 group = 'top.fish1000.mcmcl'
 version = '0.1.0'
 
+// Preserve the standalone helper artifact name now that this project is
+// nested under the root build (whose child project name is simply "helper").
+base {
+    archivesName = 'mcmcl-hmcl-helper'
+}
+
 java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(17)
@@ -28,8 +34,8 @@ repositories {
     }
 }
 
-// Opt in either to a pinned HMCL source checkout (settings.gradle's
-// composite build) or to a locally published HMCLCore artifact.  Keeping the
+// Opt in either to a pinned HMCL source checkout (the root settings.gradle's
+// composite build) or to a locally published HMCLCore artifact. Keeping the
 // dependency conditional lets the protocol skeleton build without pretending
 // that HMCLCore is available from a public Maven repository.
 def hmclCheckout = project.findProperty('hmclCheckout')
@@ -52,7 +58,8 @@ if (hmclCheckout != null) {
     // A Git checkout can be verified exactly. GitHub source archives do not
     // contain .git, so their reviewed revision is recorded but cannot be
     // independently inferred here.
-    def checkoutDirectory = file(hmclCheckout)
+    // Match the root settings.gradle includeBuild base for relative paths.
+    def checkoutDirectory = rootProject.file(hmclCheckout)
     if (new File(checkoutDirectory, '.git').exists()) {
         def gitHead = providers.exec {
             commandLine 'git', '-C', checkoutDirectory.absolutePath, 'rev-parse', 'HEAD'
@@ -193,7 +200,7 @@ tasks.register('installHelper', Copy) {
 // provide its corresponding source or a valid written offer alongside the
 // helper artifact.
 if (hmclProfile && hmclCheckout != null) {
-    def hmclLicense = file("${hmclCheckout}/LICENSE")
+    def hmclLicense = rootProject.file("${hmclCheckout}/LICENSE")
     tasks.named('jar') {
         doFirst {
             if (!hmclLicense.isFile()) {
