@@ -1,16 +1,19 @@
 package top.fish1000.mcmcl.helper.hmcl;
 
 import org.jackhuang.hmcl.auth.AuthInfo;
-import org.jackhuang.hmcl.download.BMCLAPIDownloadProvider;
 import org.jackhuang.hmcl.download.ComponentRemoteVersion;
-import org.jackhuang.hmcl.download.ComponentVersionList;
+import org.jackhuang.hmcl.download.ComponentRemoteVersionList;
 import org.jackhuang.hmcl.download.DefaultCacheRepository;
 import org.jackhuang.hmcl.download.DefaultDependencyManager;
+import org.jackhuang.hmcl.download.DownloadCandidate;
+import org.jackhuang.hmcl.download.DownloadCandidates;
 import org.jackhuang.hmcl.download.DownloadProvider;
 import org.jackhuang.hmcl.download.GameBuilder;
-import org.jackhuang.hmcl.download.MojangDownloadProvider;
-import org.jackhuang.hmcl.download.game.GameVersionList;
+import org.jackhuang.hmcl.download.forge.ForgeRemoteVersion;
 import org.jackhuang.hmcl.download.game.GameRemoteVersion;
+import org.jackhuang.hmcl.download.neoforge.NeoForgeRemoteVersion;
+import org.jackhuang.hmcl.download.optifine.OptiFineRemoteVersion;
+import org.jackhuang.hmcl.game.AssetObject;
 import org.jackhuang.hmcl.game.DefaultGameInstance;
 import org.jackhuang.hmcl.game.DefaultGameRepository;
 import org.jackhuang.hmcl.game.DefaultGameRepositoryLayout;
@@ -32,6 +35,8 @@ import org.jackhuang.hmcl.task.TaskListener;
 import org.jackhuang.hmcl.util.CacheRepository;
 import org.jackhuang.hmcl.util.platform.ManagedProcess;
 import org.jackhuang.hmcl.util.platform.Platform;
+import org.jackhuang.hmcl.util.versioning.GameVersionNumber;
+import org.jetbrains.annotations.Nullable;
 import top.fish1000.mcmcl.helper.repository.InstanceDescriptor;
 import top.fish1000.mcmcl.helper.repository.ManifestLoaderProbe;
 
@@ -134,13 +139,13 @@ public final class RealHmclCoreAdapter implements HmclCoreAdapter {
     public List<RemoteVersionDescriptor> listRemoteVersions(String component, String gameVersion) throws Exception {
         DownloadProvider provider = createDownloadProvider();
         if (component == null || component.isBlank()) {
-            GameVersionList list = new GameVersionList(provider);
-            awaitTask(list.refreshAsync());
+            ComponentRemoteVersionList<?> list = awaitTask(
+                    provider.getVersionsAsync(GameComponentType.GAME, null, true));
             List<RemoteVersionDescriptor> result = new ArrayList<>();
-            for (GameRemoteVersion version : list.getVersions(null)) {
-                ReleaseType type = version.getType();
+            for (ComponentRemoteVersion version : list) {
+                ReleaseType type = version instanceof GameRemoteVersion game ? game.getType() : null;
                 result.add(new RemoteVersionDescriptor(
-                        version.getGameVersion(),
+                        version.getGameVersion().toString(),
                         type == null ? "unknown" : type.name().toLowerCase(Locale.ROOT),
                         version.getReleaseDate() == null ? "" : version.getReleaseDate().toString()));
             }
@@ -154,10 +159,11 @@ public final class RealHmclCoreAdapter implements HmclCoreAdapter {
         if (type == null) {
             throw new IllegalArgumentException("unknown component: " + component);
         }
-        ComponentVersionList<?> list = provider.getVersionList(type);
-        awaitTask(list.refreshAsync());
+        // The protocol guarantees gameVersion is present whenever component is set.
+        ComponentRemoteVersionList<?> list = awaitTask(
+                provider.getVersionsAsync(type, GameVersionNumber.asGameVersion(gameVersion), true));
         List<RemoteVersionDescriptor> result = new ArrayList<>();
-        for (ComponentRemoteVersion version : list.getVersions(gameVersion)) {
+        for (ComponentRemoteVersion version : list) {
             result.add(new RemoteVersionDescriptor(
                     version.getSelfVersion(),
                     type.getPatchId(),
@@ -166,7 +172,8 @@ public final class RealHmclCoreAdapter implements HmclCoreAdapter {
         return result;
     }
 
-    private static void awaitTask(Task<?> task) throws Exception {
+    /// Runs {@code task} to completion and returns its result.
+    private static <T> T awaitTask(Task<T> task) throws Exception {
         CountDownLatch done = new CountDownLatch(1);
         AtomicBoolean success = new AtomicBoolean();
         TaskExecutor executor = task.executor(new TaskListener() {
@@ -185,6 +192,7 @@ public final class RealHmclCoreAdapter implements HmclCoreAdapter {
             }
             throw failure;
         }
+        return task.getResult();
     }
 
     @Override
@@ -300,15 +308,15 @@ public final class RealHmclCoreAdapter implements HmclCoreAdapter {
 
     private DownloadProvider createDownloadProvider() {
         if ("bmclapi".equals(downloadProvider)) {
-            return new BMCLAPIDownloadProvider("https://bmclapi2.bangbang93.com");
+            return new MirrorDownloadProvider("https://bmclapi2.bangbang93.com");
         }
         if (!"mojang".equals(downloadProvider)
                 && (downloadProvider.startsWith("http://") || downloadProvider.startsWith("https://"))) {
             // A custom BMCLAPI-compatible mirror root; also used by tests to
             // point the installer at a local fixture server.
-            return new BMCLAPIDownloadProvider(downloadProvider);
+            return new MirrorDownloadProvider(downloadProvider);
         }
-        return new MojangDownloadProvider();
+        return new DownloadProvider();
     }
 
     @Override
@@ -601,6 +609,124 @@ public final class RealHmclCoreAdapter implements HmclCoreAdapter {
             if (value != null) {
                 closeQuietly(value);
             }
+        }
+    }
+
+    /// A HMCLCore-only DownloadProvider that redirects Mojang, Forge, Fabric,
+    /// LiteLoader and other official endpoints to a BMCLAPI-compatible mirror
+    /// root. HMCL Core no longer ships a mirror provider implementation (the
+    /// mirror logic moved into the HMCL settings module), so the helper keeps
+    /// the {@code --download-provider bmclapi|url} option with this subclass.
+    private static final class MirrorDownloadProvider extends DownloadProvider {
+        private record MirrorRule(String source, String target) {
+        }
+
+        private final String apiRoot;
+        private final List<MirrorRule> rules;
+        private final List<MirrorRule> fallbackRules;
+
+        /// @param apiRoot the BMCLAPI-compatible mirror root URL
+        MirrorDownloadProvider(String apiRoot) {
+            this.apiRoot = apiRoot;
+            this.rules = List.of(
+                    new MirrorRule("https://bmclapi2.bangbang93.com", apiRoot),
+                    new MirrorRule("https://launchermeta.mojang.com", apiRoot),
+                    new MirrorRule("https://piston-meta.mojang.com", apiRoot),
+                    new MirrorRule("https://piston-data.mojang.com", apiRoot),
+                    new MirrorRule("https://launcher.mojang.com", apiRoot),
+                    new MirrorRule("https://libraries.minecraft.net", apiRoot + "/libraries"),
+                    new MirrorRule("http://files.minecraftforge.net/maven", apiRoot + "/maven"),
+                    new MirrorRule("https://files.minecraftforge.net/maven", apiRoot + "/maven"),
+                    new MirrorRule("https://maven.minecraftforge.net", apiRoot + "/maven"),
+                    new MirrorRule("https://maven.neoforged.net/releases/", apiRoot + "/maven/"),
+                    new MirrorRule("http://dl.liteloader.com/versions/versions.json",
+                            apiRoot + "/maven/com/mumfrey/liteloader/versions.json"),
+                    new MirrorRule("http://dl.liteloader.com/versions", apiRoot + "/maven"),
+                    new MirrorRule("https://meta.fabricmc.net", apiRoot + "/fabric-meta"),
+                    new MirrorRule("https://maven.fabricmc.net", apiRoot + "/maven"),
+                    new MirrorRule("https://authlib-injector.yushi.moe", apiRoot + "/mirrors/authlib-injector"),
+                    new MirrorRule("https://repo1.maven.org/maven2",
+                            "https://mirrors.cloud.tencent.com/nexus/repository/maven-public"),
+                    new MirrorRule("https://repo.maven.apache.org/maven2",
+                            "https://mirrors.cloud.tencent.com/nexus/repository/maven-public"),
+                    new MirrorRule("https://hmcl.glavo.site/metadata/cleanroom",
+                            "https://alist.8mi.tech/d/mirror/HMCL-Metadata/Auto/cleanroom"),
+                    new MirrorRule("https://hmcl.glavo.site/metadata/fmllibs",
+                            "https://alist.8mi.tech/d/mirror/HMCL-Metadata/Auto/fmllibs"),
+                    new MirrorRule("https://zkitefly.github.io/unlisted-versions-of-minecraft",
+                            "https://alist.8mi.tech/d/mirror/unlisted-versions-of-minecraft/Auto"));
+            // https://github.com/mcmod-info-mirror/mcim-rust-api
+            this.fallbackRules = List.of(
+                    new MirrorRule("https://api.modrinth.com", "https://mod.mcimirror.top/modrinth"),
+                    new MirrorRule("https://cdn.modrinth.com", "https://mod.mcimirror.top"),
+                    new MirrorRule("https://api.curseforge.com", "https://mod.mcimirror.top/curseforge"),
+                    new MirrorRule("https://edge.forgecdn.net", "https://mod.mcimirror.top"));
+        }
+
+        private @Nullable String inject(List<MirrorRule> candidates, String url) {
+            for (MirrorRule rule : candidates) {
+                if (url.startsWith(rule.source())) {
+                    return rule.target() + url.substring(rule.source().length());
+                }
+            }
+            return null;
+        }
+
+        /// Mirror-only URLs for metadata that BMCLAPI serves itself, and the
+        /// Forge/NeoForge/OptiFine version lists whose BMCLAPI endpoints differ
+        /// from the official ones.
+        @Override
+        public DownloadCandidates getGameVersionListCandidates() {
+            return DownloadCandidates.of(apiRoot + "/mc/game/version_manifest.json");
+        }
+
+        @Override
+        public FabricLikeVersionListCandidates getFabricVersionListCandidates() {
+            return new FabricLikeVersionListCandidates(
+                    DownloadCandidates.of(apiRoot + "/fabric-meta/v2/versions/loader"),
+                    DownloadCandidates.of(apiRoot + "/fabric-meta/v2/versions/game"));
+        }
+
+        @Override
+        public DownloadCandidates getCleanroomVersionListCandidates() {
+            return DownloadCandidates.of("https://alist.8mi.tech/d/mirror/HMCL-Metadata/Auto/cleanroom");
+        }
+
+        @Override
+        protected Task<? extends ComponentRemoteVersionList<?>> fetchVersionsAsync(
+                GameComponentType type, @Nullable GameVersionNumber gameVersion) {
+            return switch (type) {
+                case FORGE -> ForgeRemoteVersion.fetchBMCLAsync(this, apiRoot, gameVersion);
+                case NEO_FORGE -> NeoForgeRemoteVersion.fetchBMCLAsync(apiRoot, gameVersion);
+                case OPTIFINE -> OptiFineRemoteVersion.fetchBMCLAsync(this, apiRoot, gameVersion);
+                default -> super.fetchVersionsAsync(type, gameVersion);
+            };
+        }
+
+        @Override
+        public DownloadCandidates getAssetObjectCandidates(AssetObject assetObject) {
+            return DownloadCandidates.of(apiRoot + "/assets/" + assetObject.getLocation());
+        }
+
+        /// Rewrites every URL through the mirror rules: a primary rule match
+        /// replaces the URL, a fallback-rule match keeps the official URL first
+        /// and appends the mirror, and unmatched URLs are left untouched.
+        @Override
+        public DownloadCandidates getDownloadCandidates(List<String> urls) {
+            List<DownloadCandidate> candidates = new ArrayList<>(urls.size());
+            for (String url : urls) {
+                String mirror = inject(rules, url);
+                if (mirror == null) {
+                    candidates.add(DownloadCandidate.of(url));
+                    String fallback = inject(fallbackRules, url);
+                    if (fallback != null) {
+                        candidates.add(DownloadCandidate.of(fallback));
+                    }
+                } else {
+                    candidates.add(DownloadCandidate.of(mirror));
+                }
+            }
+            return DownloadCandidates.of(candidates);
         }
     }
 
